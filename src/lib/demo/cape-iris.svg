@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="32" viewBox="0 0 64 32" shape-rendering="crispEdges">
+  <!-- Original Patina demo cape, MIT licensed. -->
+  <path fill="#312942" d="M0 0h64v32H0z"/>
+  <path fill="#78629c" d="M1 1h10v16H1z"/>
+  <path fill="#c9b8f4" d="m6 3 4 5-4 5-4-5z"/>
+  <path fill="#312942" d="M5 6h2v4H5z"/>
+  <path fill="#e4a16e" d="M2 15h8v1H2z"/>
+</svg>

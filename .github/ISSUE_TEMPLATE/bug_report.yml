@@ -1,0 +1,32 @@
+name: Bug report
+description: Report a reproducible launcher or client problem.
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Launcher
+        - Rust client
+        - Build / packaging
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, app version/commit, GPU if relevant, Minecraft version and loader.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and expected result
+      description: Describe the steps, what happened and what should have happened.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Remove account data, tokens and private server addresses. Never attach accounts.json or private worlds.

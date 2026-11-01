@@ -1,0 +1,15 @@
+{
+  "patina.options.controller": "Геймпад",
+  "patina.options.vibration": "Вібрація",
+  "patina.options.adaptive_triggers": "Адаптивні тригери",
+  "patina.options.lightbar": "Світлова панель",
+  "patina.options.look_sensitivity": "Чутливість огляду",
+  "patina.options.invert_x": "Інвертувати огляд по X",
+  "patina.options.invert_y": "Інвертувати огляд по Y",
+  "patina.options.sneak_button": "Кнопка присідання",
+  "patina.options.move_deadzone": "Мертва зона руху",
+  "patina.options.look_deadzone": "Мертва зона огляду",
+  "patina.options.button_glyphs": "Значки кнопок",
+  "patina.options.menu_navigation": "Навігація в меню",
+  "patina.options.on_screen_keyboard": "Екранна клавіатура"
+}

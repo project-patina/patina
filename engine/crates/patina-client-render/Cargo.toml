@@ -1,0 +1,67 @@
+[package]
+name = "patina-client-render"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version = "1.90"
+description = "The client's world data, rendering and screens: chunks, meshing, light, streaming, the renderer, the HUD, menus and settings; no gameplay"
+
+[dependencies]
+patina-assets = { path = "../patina-assets" }
+patina-bench = { path = "../patina-bench" }
+patina-client-core = { path = "../patina-client-core" }
+patina-client-input = { path = "../patina-client-input" }
+patina-command = { path = "../patina-command" }
+patina-core = { path = "../patina-core" }
+patina-hdr = { path = "../patina-hdr" }
+patina-items = { path = "../patina-items" }
+patina-protocol = { path = "../patina-protocol" }
+patina-shader-api = { path = "../patina-shader-api" }
+patina-shaders = { path = "../patina-shaders" }
+patina-telemetry = { path = "../patina-telemetry", default-features = false, features = ["live"] }
+patina-theme = { path = "../patina-theme" }
+patina-threads = { path = "../patina-threads" }
+patina-world = { path = "../patina-world" }
+ab_glyph = "0.2.32"
+bytemuck = { version = "1.24", features = ["derive"] }
+# Sound (ALSA on Linux); the `audio` feature.
+cpal = { version = "0.16", optional = true }
+chrono = { version = "0.4.42", default-features = false, features = ["clock", "std"] }
+flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs", "runtime_detection"] }
+glam = "0.30"
+log = "0.4"
+miniz_oxide = "0.8"
+naga = { version = "30.0.1", features = ["wgsl-in", "hlsl-out"] }
+png = "0.18"
+pollster = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1.0.151", features = ["raw_value"] }
+sha2 = "0.10.9"
+symphonia = { version = "0.5", default-features = false, features = ["ogg", "vorbis"] }
+unicode-bidi = "0.3.18"
+ureq = { version = "2", default-features = false, features = ["tls"] }
+wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "vulkan", "metal", "wgsl", "naga-ir"] }
+winit = "0.30.13"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", default-features = false, features = ["std", "time"] }
+
+[target.'cfg(windows)'.dependencies]
+wgpu = { version = "30.0.1", default-features = false, features = ["dx12"] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
+
+[features]
+# Sound output: patina-client's `audio` feature.
+audio = ["dep:cpal"]
+# Helpers patina-client's tests build their fixtures with.
+test-support = []
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+patina-items = { path = "../patina-items", features = ["test-support"] }
+naga = { version = "30.0.1", features = ["wgsl-in", "hlsl-out", "msl-out", "spv-out"] }

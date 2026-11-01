@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <!-- Original Patina demo robot, MIT licensed. No game textures. -->
+  <path fill="#263b43" d="M0 0h32v16H0z"/>
+  <path fill="#344f58" d="M8 0h8v8H8zM16 8h8v8h-8z"/>
+  <path fill="#162a31" d="M8 8h8v8H8z"/>
+  <path fill="#80e5ca" d="M9 10h6v3H9z"/>
+  <path fill="#e8fff6" d="M10 10h2v2h-2z"/>
+  <path fill="#3fb8a0" d="M16 16h24v16H16zM40 16h16v16H40zM32 48h16v16H32z"/>
+  <path fill="#287b70" d="M16 20h4v12h-4zM28 20h4v12h-4zM40 20h4v12h-4zM48 20h4v12h-4zM32 52h4v12h-4zM40 52h4v12h-4z"/>
+  <path fill="#20323a" d="M0 16h16v16H0zM16 48h16v16H16z"/>
+  <path fill="#e4a16e" d="M20 22h8v2h-8zM23 24h2v5h-2zM44 28h4v4h-4zM36 60h4v4h-4zM4 29h4v3H4zM20 61h4v3h-4z"/>
+  <path fill="#17262c" d="M0 29h4v3H0zM8 29h8v3H8zM16 61h4v3h-4zM24 61h8v3h-8z"/>
+</svg>

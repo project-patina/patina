@@ -1,0 +1,15 @@
+{
+  "patina.options.controller": "Kontroler",
+  "patina.options.vibration": "Wibracje",
+  "patina.options.adaptive_triggers": "Adaptacyjne spusty",
+  "patina.options.lightbar": "Pasek świetlny",
+  "patina.options.look_sensitivity": "Czułość rozglądania",
+  "patina.options.invert_x": "Odwróć oś X rozglądania",
+  "patina.options.invert_y": "Odwróć oś Y rozglądania",
+  "patina.options.sneak_button": "Przycisk skradania",
+  "patina.options.move_deadzone": "Martwa strefa ruchu",
+  "patina.options.look_deadzone": "Martwa strefa rozglądania",
+  "patina.options.button_glyphs": "Symbole przycisków",
+  "patina.options.menu_navigation": "Nawigacja po menu",
+  "patina.options.on_screen_keyboard": "Klawiatura ekranowa"
+}

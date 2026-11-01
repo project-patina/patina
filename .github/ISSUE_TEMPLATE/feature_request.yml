@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest a focused improvement to Patina.
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What user problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Suggested approach
+      description: Explain the behavior and how it fits Patina's minimal interface.
+    validations:
+      required: true

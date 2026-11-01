@@ -1,0 +1,34 @@
+[
+  {
+    "version": "0.2.0",
+    "date": "2026-11-01",
+    "title": "Mniej rozpraszaczy. Więcej Twojego stylu.",
+    "summary": "Spokojniejszy ekran startowy, sześć motywów i wygodne miejsce na nowości w Patinie.",
+    "sections": [
+      {
+        "title": "Nowości",
+        "items": [
+          "Zakładka NEWS zbiera informacje o zmianach w launcherze. Działa także bez internetu.",
+          "Sześć palet: Patina, Grafit, Ocean, Las, Miedź i Irys. Każda współpracuje z trybem jasnym, ciemnym i systemowym."
+        ]
+      },
+      {
+        "title": "Prościej i czytelniej",
+        "items": [
+          "Ekran startowy skupia się na uruchomieniu gry i ostatnio granych instancjach.",
+          "Usunięto powielone skróty i kafelki statystyk. Personalizacja ekranu jest w jednym menu.",
+          "Szczegółowe opcje wyglądu są w rozwijanych sekcjach."
+        ]
+      },
+      {
+        "title": "Poprawki",
+        "items": [
+          "Zapis ustawień zachowuje kolejność zmian i kończy się przed uruchomieniem gry.",
+          "Pobieranie sprawdza rozmiar plików i lepiej reaguje na anulowanie.",
+          "Błąd systemowego kosza nie powoduje trwałego usunięcia instancji.",
+          "Poprawiono walidację ustawień oraz zmianę wersji przygotowywanej gry."
+        ]
+      }
+    ]
+  }
+]
