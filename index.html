@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Patina — launcher i klient Minecraft</title>
+<meta name="description" content="Patina: spokojny launcher Minecraft z własnym klientem na Fabric i w Rust. Pobierz na Linux i Windows." />
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+<style>
+  :root {
+    --bg: #0e1112;
+    --bg-2: #131718;
+    --panel: #181d1e;
+    --border: #252c2e;
+    --text: #e8f0ee;
+    --text-2: #a9b6b3;
+    --text-3: #7a8784;
+    --accent: #3fb8a0;
+    --accent-strong: #5fd0b8;
+    --accent-soft: rgb(63 184 160 / 0.14);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-strong); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  img { max-width: 100%; display: block; }
+  .wrap { width: min(1120px, 100% - 32px); margin: 0 auto; }
+
+  nav {
+    position: sticky; top: 0; z-index: 10;
+    background: rgb(14 17 18 / 0.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav .wrap { display: flex; align-items: center; gap: 24px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--text); font-size: 18px; }
+  .brand img { width: 26px; height: 26px; }
+  .links { display: flex; gap: 20px; margin-left: auto; font-size: 14px; }
+  .links a { color: var(--text-2); }
+  .links a:hover { color: var(--text); text-decoration: none; }
+  .lang { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .lang button { background: none; border: 0; color: var(--text-3); padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  .lang button[aria-pressed="true"] { background: var(--panel); color: var(--text); }
+
+  header.hero { padding: 72px 0 40px; text-align: center; }
+  .eyebrow { display: inline-block; padding: 4px 12px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-strong); font-size: 13px; font-weight: 600; }
+  h1 { font-size: clamp(36px, 6vw, 60px); line-height: 1.05; margin: 18px 0 14px; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .lead { max-width: 680px; margin: 0 auto; color: var(--text-2); font-size: 18px; }
+  .downloads { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 32px 0 10px; }
+  .dl {
+    display: inline-flex; align-items: center; gap: 12px;
+    padding: 14px 22px; border-radius: 12px;
+    background: var(--accent); color: #062420; font-weight: 700;
+    box-shadow: 0 8px 30px rgb(63 184 160 / 0.25);
+    transition: transform 0.15s, background 0.15s;
+  }
+  .dl:hover { background: var(--accent-strong); text-decoration: none; transform: translateY(-1px); }
+  .dl.secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border); box-shadow: none; }
+  .dl.secondary:hover { background: #1f2526; }
+  .dl svg { width: 22px; height: 22px; flex-shrink: 0; }
+  .dl small { display: block; font-weight: 500; font-size: 12px; opacity: 0.75; }
+  .note { color: var(--text-3); font-size: 13px; }
+  .shot-main { margin: 40px auto 0; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: 0 30px 80px rgb(0 0 0 / 0.5); overflow: hidden; max-width: 1040px; }
+
+  section { padding: 64px 0; }
+  section.alt { background: var(--bg-2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  h2 { font-size: clamp(26px, 4vw, 36px); margin: 0 0 10px; letter-spacing: -0.01em; }
+  .sub { color: var(--text-2); max-width: 720px; margin: 0 0 32px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--text-2); font-size: 15px; }
+  .card .icon { width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-strong); display: grid; place-items: center; margin-bottom: 12px; }
+  .card .icon svg { width: 20px; height: 20px; }
+  .shots { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); margin-top: 28px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  figcaption { padding: 10px 14px; color: var(--text-3); font-size: 14px; }
+  .steps { counter-reset: step; display: grid; gap: 12px; padding: 0; list-style: none; max-width: 760px; }
+  .steps li { counter-increment: step; display: flex; gap: 14px; align-items: flex-start; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; color: var(--text-2); }
+  .steps li::before { content: counter(step); flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-strong); display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+  code { background: #0a0d0e; border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 14px; color: var(--text); }
+  details { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; max-width: 760px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { color: var(--text-2); margin: 10px 0 0; }
+  footer { padding: 40px 0; color: var(--text-3); font-size: 13px; border-top: 1px solid var(--border); }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 32px; justify-content: space-between; }
+  [data-lang]:not(.active) { display: none !important; }
+  @media (max-width: 720px) {
+    .links { display: none; }
+    .lang { margin-left: auto; }
+    header.hero { padding-top: 48px; }
+  }
+</style>
+</head>
+<body>
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="assets/icon.svg" alt="" />Patina</a>
+    <div class="links">
+      <a href="#launcher"><span data-lang="pl">Launcher</span><span data-lang="en">Launcher</span></a>
+      <a href="#client"><span data-lang="pl">Klient</span><span data-lang="en">Client</span></a>
+      <a href="#install"><span data-lang="pl">Instalacja</span><span data-lang="en">Install</span></a>
+      <a href="https://github.com/project-patina/patina">GitHub</a>
+    </div>
+    <div class="lang" role="group" aria-label="Język / Language">
+      <button type="button" data-set="pl">PL</button>
+      <button type="button" data-set="en">EN</button>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><span data-lang="pl">Wersja</span><span data-lang="en">Version</span> 0.4.0 · open source</span>
+    <h1 data-lang="pl">Minecraft,<br /><span>spokojnie.</span></h1>
+    <h1 data-lang="en">Minecraft,<br /><span>calmly.</span></h1>
+    <p class="lead" data-lang="pl">Patina to launcher Minecraft: Java Edition z własnym klientem — modem na Fabric i natywnym klientem w Rust, które wyglądają i działają tak samo.</p>
+    <p class="lead" data-lang="en">Patina is a Minecraft: Java Edition launcher with its own client — a Fabric mod and a native Rust client that look and work the same.</p>
+    <div class="downloads">
+      <a class="dl" href="https://github.com/project-patina/patina/releases/latest/download/Patina-linux-x86_64.zip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        <span><span data-lang="pl">Pobierz na Linux</span><span data-lang="en">Download for Linux</span><small>x86_64 · zip</small></span>
+      </a>
+      <a class="dl secondary" href="https://github.com/project-patina/patina/releases/latest/download/Patina-windows-x86_64.zip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        <span><span data-lang="pl">Pobierz na Windows</span><span data-lang="en">Download for Windows</span><small>x86_64 · zip</small></span>
+      </a>
+    </div>
+    <p class="note"><span data-lang="pl">Wymaga konta Minecraft: Java Edition. Wszystkie wersje:</span><span data-lang="en">Needs a Minecraft: Java Edition account. All versions:</span> <a href="https://github.com/project-patina/patina/releases">GitHub Releases</a></p>
+    <div class="shot-main"><img src="assets/launcher-home.png" alt="Patina launcher" width="1280" height="800" /></div>
+  </div>
+</header>
+
+<section id="launcher" class="alt">
+  <div class="wrap">
+    <h2>Launcher</h2>
+    <p class="sub" data-lang="pl">Wszystko, czego potrzebujesz do gry, w jednym cichym oknie — bez reklam i bez zbędnych przycisków.</p>
+    <p class="sub" data-lang="en">Everything you need to play, in one quiet window — no ads, no clutter.</p>
+    <div class="grid">
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+        <h3 data-lang="pl">Instancje</h3><h3 data-lang="en">Instances</h3>
+        <p data-lang="pl">Osobne instancje Fabric i Rust, każda z własną pamięcią, Javą i ustawieniami.</p>
+        <p data-lang="en">Separate Fabric and Rust instances, each with its own memory, Java and settings.</p></div>
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg></div>
+        <h3 data-lang="pl">Serwery</h3><h3 data-lang="en">Servers</h3>
+        <p data-lang="pl">Popularne serwery z regionem, liczbą graczy i pingiem. Jedno kliknięcie i jesteś w grze.</p>
+        <p data-lang="en">Popular servers with their region, players and ping. One click and you are in.</p></div>
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/></svg></div>
+        <h3 data-lang="pl">Mody z Modrinth</h3><h3 data-lang="en">Mods from Modrinth</h3>
+        <p data-lang="pl">Mody, paczki zasobów i shadery instalowane jednym przyciskiem.</p>
+        <p data-lang="en">Mods, resource packs and shaders installed with one button.</p></div>
+      <div class="card"><div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.4 7.2 16 3l-2 2c-.5.5-1.5 1-2 1s-1.5-.5-2-1L8 3 3.6 7.2 6 10l2-1v12h8V9l2 1z"/></svg></div>
+        <h3 data-lang="pl">Skiny i peleryny</h3><h3 data-lang="en">Skins and capes</h3>
+        <p data-lang="pl">Konta Microsoft, skiny i peleryny z podglądem 3D.</p>
+        <p data-lang="en">Microsoft accounts, skins and capes with a 3D preview.</p></div>
+    </div>
+    <div class="shots">
+      <figure><img src="assets/launcher-servers.png" alt="" loading="lazy" /><figcaption data-lang="pl">Lista serwerów</figcaption><figcaption data-lang="en">The server list</figcaption></figure>
+      <figure><img src="assets/launcher-appearance.png" alt="" loading="lazy" /><figcaption data-lang="pl">Sześć palet, tryb jasny i ciemny</figcaption><figcaption data-lang="en">Six palettes, light and dark</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="client">
+  <div class="wrap">
+    <h2>Patina Client</h2>
+    <p class="sub" data-lang="pl">Ten sam klient w dwóch wersjach: jako mod na Fabric 26.3 i jako natywny klient w Rust oparty na Horizon. Menu, ustawienia i wbudowane mody wyglądają identycznie.</p>
+    <p class="sub" data-lang="en">One client in two forms: a Fabric 26.3 mod and a native Rust client based on Horizon. The menu, settings and built-in mods look the same.</p>
+    <div class="grid">
+      <div class="card"><h3 data-lang="pl">Edytor HUD-u</h3><h3 data-lang="en">HUD editor</h3>
+        <p data-lang="pl">Przeciągnij licznik FPS, klawisze czy współrzędne prosto na grze. Rozmiar zmienisz kółkiem albo rogiem — co ustawisz, tam będzie.</p>
+        <p data-lang="en">Drag the FPS counter, keystrokes or coordinates right on the game. Resize with the wheel or the corner — what you place is where it shows.</p></div>
+      <div class="card"><h3 data-lang="pl">Wbudowane mody</h3><h3 data-lang="en">Built-in mods</h3>
+        <p data-lang="pl">Licznik FPS z 1% low, klawisze i współrzędne — bez instalowania czegokolwiek.</p>
+        <p data-lang="en">An FPS counter with 1% lows, keystrokes and coordinates — nothing to install.</p></div>
+      <div class="card"><h3 data-lang="pl">Własne menu</h3><h3 data-lang="en">Its own menu</h3>
+        <p data-lang="pl">Menu główne z Twoim skinem, płynnymi animacjami i ciemnym tłem launchera.</p>
+        <p data-lang="en">A main menu with your skin, smooth motion and the launcher's dark background.</p></div>
+    </div>
+    <div class="shots">
+      <figure><img src="assets/client-menu-fabric.png" alt="" loading="lazy" /><figcaption data-lang="pl">Menu główne na Fabric</figcaption><figcaption data-lang="en">Main menu on Fabric</figcaption></figure>
+      <figure><img src="assets/client-menu-rust.png" alt="" loading="lazy" /><figcaption data-lang="pl">To samo menu w kliencie Rust</figcaption><figcaption data-lang="en">The same menu in the Rust client</figcaption></figure>
+      <figure><img src="assets/client-hud-editor.jpg" alt="" loading="lazy" /><figcaption data-lang="pl">Edytor HUD-u nad światem</figcaption><figcaption data-lang="en">The HUD editor over a world</figcaption></figure>
+      <figure><img src="assets/client-settings.png" alt="" loading="lazy" /><figcaption data-lang="pl">Ustawienia klienta</figcaption><figcaption data-lang="en">Client settings</figcaption></figure>
+      <figure><img src="assets/client-ingame.jpg" alt="" loading="lazy" /><figcaption data-lang="pl">Wbudowane mody w grze</figcaption><figcaption data-lang="en">The built-in mods in game</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="install" class="alt">
+  <div class="wrap">
+    <h2 data-lang="pl">Instalacja</h2><h2 data-lang="en">Install</h2>
+    <ol class="steps" data-lang="pl">
+      <li><span>Pobierz paczkę na swój system i rozpakuj ją w dowolnym folderze.</span></li>
+      <li><span>Linux: uruchom <code>launcher/patina</code>. Windows: uruchom <code>launcher\patina.exe</code>.</span></li>
+      <li><span>Zaloguj się kontem Microsoft, utwórz instancję i graj. Kolejne wersje Patina zainstaluje sama.</span></li>
+    </ol>
+    <ol class="steps" data-lang="en">
+      <li><span>Download the package for your system and unpack it in any folder.</span></li>
+      <li><span>Linux: run <code>launcher/patina</code>. Windows: run <code>launcher\patina.exe</code>.</span></li>
+      <li><span>Sign in with a Microsoft account, create an instance and play. Patina installs later versions itself.</span></li>
+    </ol>
+    <h3 data-lang="pl" style="margin-top:32px">Pytania</h3><h3 data-lang="en" style="margin-top:32px">Questions</h3>
+    <div data-lang="pl">
+      <details><summary>Windows ostrzega przed nieznanym wydawcą</summary><p>Patina nie jest jeszcze podpisana certyfikatem, więc SmartScreen może pokazać ostrzeżenie. Kliknij „Więcej informacji” i „Uruchom mimo to”. Kod jest w całości na GitHubie.</p></details>
+      <details><summary>Czy potrzebuję konta Minecraft?</summary><p>Tak. Patina gra tylko na oryginalnym koncie Minecraft: Java Edition i nie zawiera plików gry.</p></details>
+      <details><summary>Czym różni się klient Rust od Fabric?</summary><p>Klient Rust to osobny program napisany od zera (na bazie Horizon) — bardzo szybki, ale mody z Fabric w nim nie działają. Wersja Fabric to zwykły Minecraft z modem Patina, więc działa z innymi modami.</p></details>
+    </div>
+    <div data-lang="en">
+      <details><summary>Windows warns about an unknown publisher</summary><p>Patina is not code-signed yet, so SmartScreen may show a warning. Click "More info" and "Run anyway". All of the code is on GitHub.</p></details>
+      <details><summary>Do I need a Minecraft account?</summary><p>Yes. Patina only plays with a genuine Minecraft: Java Edition account and ships no game files.</p></details>
+      <details><summary>How is the Rust client different from Fabric?</summary><p>The Rust client is a separate program (based on Horizon) — very fast, but Fabric mods do not run in it. The Fabric version is regular Minecraft with the Patina mod, so it works with other mods.</p></details>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Patina contributors · <a href="https://github.com/project-patina/patina/blob/main/LICENSE">MIT</a> · <span data-lang="pl">Klient Rust oparty na</span><span data-lang="en">Rust client based on</span> <a href="https://github.com/horizon-rust/horizon">Horizon</a></span>
+    <span data-lang="pl">Nie jest oficjalnym produktem Minecraft. Niezatwierdzony przez Mojang ani Microsoft i z nimi niezwiązany.</span>
+    <span data-lang="en">Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.</span>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("patina.lang"); } catch (e) {}
+    var lang = saved || ((navigator.language || "").toLowerCase().indexOf("pl") === 0 ? "pl" : "en");
+    function set(l) {
+      lang = l;
+      document.documentElement.lang = l;
+      document.querySelectorAll("[data-lang]").forEach(function (el) { el.classList.toggle("active", el.getAttribute("data-lang") === l); });
+      document.querySelectorAll("[data-set]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-set") === l)); });
+      document.title = l === "pl" ? "Patina — launcher i klient Minecraft" : "Patina — Minecraft launcher and client";
+      try { localStorage.setItem("patina.lang", l); } catch (e) {}
+    }
+    document.querySelectorAll("[data-set]").forEach(function (b) { b.addEventListener("click", function () { set(b.getAttribute("data-set")); }); });
+    set(lang);
+  })();
+</script>
+</body>
+</html>
