@@ -19,35 +19,34 @@
     align-items: center;
     justify-content: space-between;
     gap: 24px;
-    padding: 14px 0;
+    min-height: 48px;
+    padding: 8px 0;
     border-bottom: 1px solid var(--border);
   }
-  .row:last-child {
-    border-bottom: 0;
-  }
+  .row:last-child { border-bottom: 0; }
   .row.stacked {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
+    gap: 8px;
+    padding: 12px 0;
   }
-  .title {
-    font-weight: 560;
-  }
+  .text { flex: 1 1 0; min-width: 0; }
+  .stacked .text { flex: none; }
+  .title { font-size: var(--fs-13); font-weight: 500; }
   .desc {
     color: var(--text-3);
-    font-size: 0.86rem;
-    margin-top: 3px;
-    line-height: 1.45;
-    max-width: 520px;
+    font-size: var(--fs-12);
+    margin-top: 2px;
+    line-height: 1.4;
   }
   .control {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--control-gap);
     flex-shrink: 0;
+    max-width: 100%;
+    min-width: 0;
   }
-  .stacked .control {
-    flex-shrink: 1;
-    flex-wrap: wrap;
-  }
+  .control :global(input), .control :global(select) { max-width: 100%; }
+  .stacked .control { flex-shrink: 1; flex-wrap: wrap; }
 </style>

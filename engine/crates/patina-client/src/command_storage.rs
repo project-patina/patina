@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn stores_per_namespace_and_persists() {
-        let dir = std::env::temp_dir().join(format!("hz-storage-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("patina-storage-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let mut s = CommandStorage::default();
         assert_eq!(s.get("minecraft:x"), Tag::Compound(Compound::new()));

@@ -124,7 +124,7 @@ pub fn list(ctx: &Ctx, inst: &str, kind: ContentKind) -> Vec<ContentItem> {
 
 pub fn set_enabled(ctx: &Ctx, inst: &str, kind: ContentKind, file: &str, enabled: bool) -> Result<()> {
     if !safe_name(file) {
-        bail!("Niepoprawna nazwa pliku");
+        bail!("Niepoprawna nazwa pliku", "Invalid file name");
     }
     let dir = ctx.paths.game_dir(inst).join(kind.dir());
     let on = dir.join(file);
@@ -139,7 +139,7 @@ pub fn set_enabled(ctx: &Ctx, inst: &str, kind: ContentKind, file: &str, enabled
 /// Delete a file (to the trash when possible) without touching metadata.
 pub fn remove_file(ctx: &Ctx, inst: &str, kind: ContentKind, file: &str) -> Result<()> {
     if !safe_name(file) {
-        bail!("Niepoprawna nazwa pliku");
+        bail!("Niepoprawna nazwa pliku", "Invalid file name");
     }
     let dir = ctx.paths.game_dir(inst).join(kind.dir());
     for p in [dir.join(file), dir.join(format!("{file}.disabled"))] {
@@ -177,7 +177,7 @@ pub async fn import(ctx: &Ctx, inst: &str, kind: ContentKind, paths: &[PathBuf])
     for p in paths {
         let Some(name) = p.file_name().map(|n| n.to_string_lossy().to_string()) else { continue };
         if !kind.accepts(&name) || !safe_name(&name) {
-            bail!("{name}: zły typ pliku (oczekiwano {})", if kind == ContentKind::Mod { ".jar" } else { ".zip" });
+            bail!("{name}: zły typ pliku (oczekiwano {})", "{name}: wrong file type (expected {})", if kind == ContentKind::Mod { ".jar" } else { ".zip" });
         }
         std::fs::copy(p, dir.join(&name))?;
         out.push(name);

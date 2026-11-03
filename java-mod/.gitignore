@@ -1,0 +1,10 @@
+.gradle/
+.kotlin/
+build/
+run/
+bin/
+out/
+.idea/
+*.iml
+# The root .gitignore drops every jar; the wrapper has to stay in the repository.
+!gradle/wrapper/gradle-wrapper.jar

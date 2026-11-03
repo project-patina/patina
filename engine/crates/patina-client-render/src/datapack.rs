@@ -656,7 +656,7 @@ mod tests {
 
     #[test]
     fn enabled_packs_override_worldgen_in_order() {
-        let dir = std::env::temp_dir().join(format!("hz-datapack-worldgen-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("patina-datapack-worldgen-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let write = |pack: &str, p: &str, t: &str| {
             let path = dir.join("datapacks").join(pack).join(p);
@@ -776,7 +776,7 @@ mod tests {
 
     #[test]
     fn packs_provide_functions_and_tags() {
-        let dir = std::env::temp_dir().join(format!("hz-datapack-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("patina-datapack-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let pack = dir.join("datapacks/mypack");
         let write = |p: &str, t: &str| {
@@ -856,7 +856,7 @@ mod tests {
 
     #[test]
     fn folder_packs_list_the_needed_kinds_in_walk_order() {
-        let dir = std::env::temp_dir().join(format!("hz-datapack-kinds-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("patina-datapack-kinds-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let pack = dir.join("datapacks/p");
         let files = [
@@ -896,7 +896,7 @@ mod tests {
 
     #[test]
     fn create_world_installs_its_packs() {
-        let root = std::env::temp_dir().join(format!("hz-datapack-install-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("patina-datapack-install-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let (dir, world) = (root.join("mcworld"), root.join("world"));
         let write = |pack: &str, p: &str, t: &str| {

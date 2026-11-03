@@ -21,8 +21,6 @@ members = [
     "crates/patina-prepare",
     "crates/patina-telemetry",
     "crates/patina-bench",
-    "crates/patina-friends",
-    "crates/patina-relay",
     "crates/patina-mods",
     "crates/patina-port-pack",
     "crates/patina-shaders",

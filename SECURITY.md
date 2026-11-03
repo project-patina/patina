@@ -28,6 +28,6 @@ The source-release validator checks known token patterns and private/generated
 paths. It is a useful guard, not a proof that arbitrary source or assets are safe
 or correctly licensed. Review the selected files before publishing.
 
-The optional client is a separate, Horizon-derived codebase with network,
+The optional client is a separate codebase with network,
 telemetry and mod-related functionality. Review its settings and code for your
 build. Launcher tests do not certify that functionality.

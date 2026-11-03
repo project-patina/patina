@@ -16,17 +16,12 @@ export interface Settings {
   palette: "patina" | "graphite" | "ocean" | "forest" | "ember" | "iris";
   accent: string;
   animations: boolean;
-  blur: boolean;
   uiScale: number;
   font: "inter" | "outfit" | "system" | "mono";
   radius: "sharp" | "normal" | "round";
   compact: boolean;
   heroWallpaper: string;
-  heroScene: boolean;
-  heroDim: number;
   appWallpaper: string;
-  appWallpaperDim: number;
-  modelPosition: "center" | "left" | "right";
   followCursor: boolean;
   showNametag: boolean;
   showSnapshots: boolean;
@@ -53,8 +48,8 @@ export interface Settings {
   preLaunchCommand: string;
   postExitCommand: string;
   rustEngine: EngineSettings;
-  /** JSON of the home screen stance; empty for the default. */
-  modelPose: string;
+  /** "" follows the system, otherwise "pl" or "en". */
+  language: string;
   brandVersion: number;
   onboarded: boolean;
   lastInstance: string | null;
@@ -131,6 +126,22 @@ export interface LoaderVersion {
   stable: boolean;
 }
 
+export interface OfficialMod {
+  id: string;
+  name: string;
+  version: string;
+  summary: { pl: string; en: string };
+  icon: string | null;
+  size: number;
+  state: "available" | "installed" | "outdated";
+}
+
+export interface OfficialCatalog {
+  available: boolean;
+  mods: OfficialMod[];
+  local: string[];
+}
+
 export interface ModFile {
   file: string;
   enabled: boolean;
@@ -151,14 +162,6 @@ export interface AppInfo {
   os: string;
   arch: string;
   startPage?: string | null;
-}
-
-export interface ReleaseNote {
-  version: string;
-  date: string;
-  title: string;
-  summary: string;
-  sections: { title: string; items: string[] }[];
 }
 
 export interface Progress {
@@ -317,4 +320,56 @@ export interface McProfile {
   name: string;
   skins: McTexture[];
   capes: McTexture[];
+}
+
+export interface Announcement {
+  id: string;
+  date: string;
+  title: string;
+  summary: string;
+  image: string;
+  markdown: string;
+}
+
+export interface AnnouncementFeed {
+  items: Announcement[];
+  source: string;
+}
+
+export interface UpdateInfo {
+  version: string;
+  current: string;
+  critical: boolean;
+  date: string;
+  notes: { pl: string; en: string };
+  sizeBytes: number;
+  installable: boolean;
+}
+
+export type ServerRegion = "eu" | "na" | "sa" | "as" | "oc";
+
+/** A server of the Servers page. */
+export interface ServerEntry {
+  id: string;
+  name: string;
+  address: string;
+  region: ServerRegion;
+  tags: string[];
+}
+
+/** The server list ping's answer; `online` false when the server did not answer. */
+export interface ServerStatus {
+  online: boolean;
+  players: number | null;
+  maxPlayers: number | null;
+  version: string | null;
+  motd: string;
+  latencyMs: number | null;
+  favicon: string | null;
+}
+
+export interface UpdateProgress {
+  stage: "download" | "verify" | "install";
+  done: number;
+  total: number;
 }

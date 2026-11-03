@@ -14,11 +14,13 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 HORIZON_LICENSE_SHA256 = "b4b374ae9d0f2d8f7be35c6783e41327431da3b5662605da9ba31493630621df"
 BLOCKED_DIRS = {".git", ".codex", ".claude", ".local", ".venv", "__pycache__",
-                "node_modules", "target", "dist", "dist-windows", "exports",
+                "node_modules", "target", "dist", "dist-windows", "dist-updates", "exports",
                 "backups", "instances", "saves", "crash-reports"}
 BLOCKED_SUFFIXES = {".exe", ".dll", ".so", ".dylib", ".jar", ".class", ".jfr",
                     ".hprof", ".pem", ".key", ".p12", ".pfx", ".jks", ".keystore",
                     ".zip", ".tar", ".gz", ".tgz", ".7z", ".pyc"}
+# Gradle's own wrapper, pinned to the checksum Gradle publishes for 9.8.2.
+ALLOWED_BINARIES = {"java-mod/gradle/wrapper/gradle-wrapper.jar": "3b8a25775a69158b5ad2b1d17a80a88dc7b40a352a73eb27d06c612a7ce68e98"}
 BLOCKED_NAMES = {"accounts.json", "settings.json", "hosts.yml", "dev-skin.png",
                  "dev-cape.png", "dev-cape2.png", "BACKUP.md", "REVIEW-0.2.0.md", "SOURCE_MANIFEST.json"}
 SECRETS = re.compile(
@@ -27,7 +29,9 @@ SECRETS = re.compile(
     r"|(?m:^-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----)"
 )
 REQUIRED = {"LICENSE", "THIRD_PARTY_NOTICES.md", "README.md", "CONTRIBUTING.md",
-            "SECURITY.md", "Cargo.lock", "package-lock.json", "resources/news.json",
+            "SECURITY.md", "Cargo.lock", "package-lock.json", "resources/announcements-source.json",
+            "resources/announcements/index.json", "resources/announcements/first-version.pl.md",
+            "resources/announcements/first-version.en.md", "public/announcements/first-version.png",
             "engine/LICENSE", "engine/LICENSE-PATINA", "engine/UPSTREAM.md",
             "engine/THIRD_PARTY_NOTICES.md", "engine/Cargo.lock", ".github/workflows/ci.yml",
             "LICENSES/fonts/Inter-OFL-1.1.txt", "LICENSES/fonts/Outfit-OFL-1.1.txt",
@@ -43,6 +47,8 @@ def validate_file(relative, data):
     path = PurePosixPath(relative)
     if path.is_absolute() or ".." in path.parts or set(path.parts) & BLOCKED_DIRS:
         raise ValueError(f"Private/generated directory in export: {relative}")
+    if digest(data) == ALLOWED_BINARIES.get(relative):
+        return
     if path.name in BLOCKED_NAMES or path.suffix.lower() in BLOCKED_SUFFIXES:
         raise ValueError(f"Private/generated file in export: {relative}")
     if path.name == ".env" or (path.name.startswith(".env.") and path.name != ".env.example"):
@@ -63,6 +69,8 @@ def source_files(root=ROOT):
     result = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
                             cwd=root, capture_output=True, check=True)
     paths = sorted(set(result.stdout.decode().split("\0")) - {""})
+    deleted = subprocess.run(["git", "ls-files", "--deleted", "-z"], cwd=root, capture_output=True, check=True)
+    paths = sorted(set(paths) - set(deleted.stdout.decode().split("\0")))
     missing = REQUIRED - set(paths)
     if missing:
         raise ValueError("Required source/notices missing from Git selection: " + ", ".join(sorted(missing)))

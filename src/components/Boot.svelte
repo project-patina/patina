@@ -1,5 +1,6 @@
 <script lang="ts">
   import { fade } from "svelte/transition";
+  import { APP_NAME } from "../lib/flavour";
   import { dur } from "../lib/state.svelte";
 
   // The launcher's opening: the copper block assembles and oxidises from the top
@@ -8,8 +9,7 @@
   // the first run through.
   let { ready, ondone }: { ready: boolean; ondone: () => void } = $props();
 
-  const MIN_MS = 1700;
-  const LETTERS = [..."PATINA"];
+  const MIN_MS = 1300;
   let shownLongEnough = $state(false);
 
   $effect(() => {
@@ -22,7 +22,7 @@
   });
 </script>
 
-<div class="boot" out:fade={{ duration: dur(420) }}>
+<div class="boot" out:fade={{ duration: dur(180) }}>
   <div class="mark">
     <svg viewBox="104 82 304 348" width="104" height="119" aria-hidden="true">
       <defs>
@@ -62,12 +62,8 @@
         <path class="oxide late" d="M398 192 265 269V420L398 343Z" fill="url(#boot-patina-right)" />
       </g>
     </svg>
-    <div class="name" aria-label="Patina">
-      {#each LETTERS as letter, i (i)}
-        <span style:animation-delay={`${620 + i * 55}ms`}>{letter}</span>
-      {/each}
-    </div>
-    <div class="track"><div class="fill" class:done={ready}></div></div>
+    <div class="name">{APP_NAME}</div>
+    <div class="track"><div class="fill"></div></div>
   </div>
 </div>
 
@@ -88,7 +84,7 @@
   }
   .face {
     opacity: 0;
-    animation: settle 620ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    animation: settle 520ms cubic-bezier(0.2, 0, 0, 1) forwards;
   }
   .top {
     --from: translateY(-46px);
@@ -109,17 +105,13 @@
     animation-delay: 1000ms;
   }
   .name {
-    display: flex;
-    gap: 0.42em;
     font-family: var(--font-display);
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: #e9efee;
-  }
-  .name span {
+    font-size: var(--fs-20);
+    font-weight: 600;
+    color: #e6ecea;
     opacity: 0;
-    transform: translateY(8px);
-    animation: rise 460ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    transform: translateY(6px);
+    animation: rise 360ms cubic-bezier(0.2, 0, 0, 1) 620ms forwards;
   }
   .track {
     width: 132px;
@@ -131,13 +123,10 @@
   .fill {
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, #e08a4f, #3fb8a0);
+    background: #3fb8a0;
     transform: scaleX(0);
     transform-origin: left;
-    animation: load 1500ms cubic-bezier(0.3, 0.1, 0.2, 1) 200ms forwards;
-  }
-  .fill.done {
-    animation-duration: 900ms;
+    animation: load 1100ms cubic-bezier(0.3, 0.1, 0.2, 1) 200ms forwards;
   }
   @keyframes settle {
     from {
@@ -168,7 +157,7 @@
   @media (prefers-reduced-motion: reduce) {
     .face,
     .oxide,
-    .name span,
+    .name,
     .fill {
       animation-duration: 1ms;
       animation-delay: 0ms;

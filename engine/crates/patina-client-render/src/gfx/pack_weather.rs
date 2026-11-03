@@ -13,23 +13,23 @@ use super::pack_post::Weather;
 /// pack sees straight up.
 pub fn inputs() -> patina_shaders::GbuffersInputs {
     let declarations =
-        "layout(location = 0) in vec3 hz_v_pos;\nlayout(location = 1) in vec2 hz_v_uv;\n\
-         layout(location = 2) in uint hz_v_overlay;\nlayout(location = 3) in vec4 hz_v_color;\n\
-         layout(location = 4) in uvec4 hz_v_light;\nlayout(location = 5) in vec4 hz_v_normal;\n"
+        "layout(location = 0) in vec3 pt_v_pos;\nlayout(location = 1) in vec2 pt_v_uv;\n\
+         layout(location = 2) in uint pt_v_overlay;\nlayout(location = 3) in vec4 pt_v_color;\n\
+         layout(location = 4) in uvec4 pt_v_light;\nlayout(location = 5) in vec4 pt_v_normal;\n"
             .to_owned();
-    let body = "    hz_Vertex = vec4(hz_v_pos, 1.0);\n    \
-         hz_MultiTexCoord0 = vec4(hz_v_uv, 0.0, 1.0);\n    \
-         hz_MultiTexCoord1 = vec4(float(hz_v_light.y), float(hz_v_light.x), 0.0, 1.0);\n    \
-         hz_MultiTexCoord2 = hz_MultiTexCoord1;\n    \
-         hz_Color = hz_v_color;\n    \
-         hz_Normal = vec3(0.0, 1.0, 0.0);\n"
+    let body = "    pt_Vertex = vec4(pt_v_pos, 1.0);\n    \
+         pt_MultiTexCoord0 = vec4(pt_v_uv, 0.0, 1.0);\n    \
+         pt_MultiTexCoord1 = vec4(float(pt_v_light.y), float(pt_v_light.x), 0.0, 1.0);\n    \
+         pt_MultiTexCoord2 = pt_MultiTexCoord1;\n    \
+         pt_Color = pt_v_color;\n    \
+         pt_Normal = vec3(0.0, 1.0, 0.0);\n"
         .to_owned();
     let attributes = [
-        ("vaPosition", "hz_Vertex.xyz"),
-        ("vaUV0", "hz_v_uv"),
-        ("vaUV2", "ivec2(hz_MultiTexCoord1.xy)"),
-        ("vaColor", "hz_Color"),
-        ("vaNormal", "hz_Normal"),
+        ("vaPosition", "pt_Vertex.xyz"),
+        ("vaUV0", "pt_v_uv"),
+        ("vaUV2", "ivec2(pt_MultiTexCoord1.xy)"),
+        ("vaColor", "pt_Color"),
+        ("vaNormal", "pt_Normal"),
     ];
     patina_shaders::GbuffersInputs {
         declarations,

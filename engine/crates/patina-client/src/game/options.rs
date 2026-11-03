@@ -196,7 +196,7 @@ impl Game<'_> {
         let events =
             self.ui
                 .options
-                .wheel(&mut self.settings, size, self.cursor, framebuffer, amount);
+                .wheel(&mut self.settings, &self.gui.atlas, size, self.cursor, framebuffer, amount);
         self.handle_option_events(events)
     }
     /// Mouse buttons pressed while a key is being bound.
@@ -214,8 +214,6 @@ impl Game<'_> {
                 Event::Changed => {
                     self.settings.save(&Self::options_path());
                     self.apply_settings();
-                    self.sync_agent_control();
-                    self.ui.options.agent_status = self.agent_status_lines();
                 }
                 Event::SliderDrag => {
                     self.apply_settings();
@@ -226,11 +224,6 @@ impl Game<'_> {
                     self.audio.preview(source, volume);
                 }
                 Event::Volume(..) => {}
-                Event::CopyAgentDetails => {
-                    use patina_client::clipboard::Clipboard;
-                    let text = self.agent_details();
-                    self.clipboard.set(&text);
-                }
                 Event::Close if self.ui.options.resource_error.is_some() => {}
                 Event::Close => {
                     self.settings.save(&Self::options_path());
@@ -264,11 +257,6 @@ impl Game<'_> {
                     let _ = std::fs::create_dir_all(&dir);
                     super::packs::open_folder(&dir);
                 }
-                Event::OpenModFolder => {
-                    let dir = Self::options_path().with_file_name(patina_client::mod_list::DIR);
-                    let _ = std::fs::create_dir_all(&dir);
-                    super::packs::open_folder(&dir);
-                }
                 Event::ListShaderPacks => {
                     self.settings.shader_packs =
                         patina_client::shader_pack_list::scan(&Self::shader_packs_dir());
@@ -280,8 +268,6 @@ impl Game<'_> {
                     let _ = std::fs::create_dir_all(&dir);
                     super::packs::open_folder(&dir);
                 }
-                Event::NativeSettings(i) => self.native_settings_refresh(i),
-                Event::NativeButton(i, b) => self.native_settings_event(i, b),
                 Event::Credits => self.open_win_screen(false, super::win::Finish::Options),
             }
         }
@@ -300,7 +286,6 @@ impl Game<'_> {
         let s = &self.settings;
         if let Some(r) = self.renderer.as_mut() {
             r.gamma = s.gamma;
-            r.fullbright = s.extras.fullbright;
             r.set_present_mode(s.vsync, s.patina.present_mode);
             r.animated_textures = s.patina.animated_textures;
             r.set_mipmap_levels(s.mipmap_levels.max(0) as u32);

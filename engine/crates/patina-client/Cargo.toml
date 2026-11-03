@@ -26,10 +26,9 @@ patina-server-files = { path = "../patina-server-files" }
 patina-shaders = { path = "../patina-shaders" }
 # Patina's own shader packs: the format, the stages and the check (docs/shaders.md).
 patina-shader-api = { path = "../patina-shader-api" }
-patina-friends = { path = "../patina-friends" }
 # Patina mods: sandboxed WebAssembly components, off unless installed and turned on (docs/mods.md).
 # Their runtime is the `mods` feature.
-patina-mods = { path = "../patina-mods", default-features = false, features = ["index"] }
+patina-mods = { path = "../patina-mods", default-features = false }
 wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "vulkan", "metal", "wgsl", "naga-ir"] }
 winit = "0.30.13"
 pollster = "0.4"
@@ -52,7 +51,7 @@ flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs", 
 patina-theme = { path = "../patina-theme" }
 # Opt-in data collection: the game keeps, the launcher sends (docs/telemetry.md); `live` is
 # the anonymous "I'm playing" ping the game sends itself (`heartbeat.rs`).
-patina-telemetry = { path = "../patina-telemetry", default-features = false, features = ["live"] }
+patina-telemetry = { path = "../patina-telemetry", default-features = false }
 patina-bench = { path = "../patina-bench" }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 # Controllers (evdev + libudev on Linux, IOKit on macOS, Windows.Gaming.Input); the `controllers` feature.

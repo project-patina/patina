@@ -1,5 +1,5 @@
 //! Patina's own shader packs in the game (docs/shaders.md): the pick in `shaderpacks/` (a
-//! folder with `patina-shaders.toml`, or a `.hshader`; `game/shader_packs.rs`) runs once it
+//! folder with `patina-shaders.toml`, or a `.pshader`; `game/shader_packs.rs`) runs once it
 //! passes `patina_shader_api::check`. The pack is looked at twice a second: a saved file is checked and the pack rebuilt, and a
 //! pack that fails is refused with its problems in the chat while the last good one keeps
 //! drawing.

@@ -1,4 +1,4 @@
-//! `patina-mod.toml`, a mod's manifest, and the `.hmod` file around it.
+//! `patina-mod.toml`, a mod's manifest, and the `.pmod` file around it.
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
@@ -8,13 +8,13 @@ use std::{
 
 /// The manifest's file name, beside `mod.wasm`.
 pub const MANIFEST: &str = "patina-mod.toml";
-/// The component's file name in a `.hmod` or a mod folder.
+/// The component's file name in a `.pmod` or a mod folder.
 pub const WASM: &str = "mod.wasm";
 /// The API (WIT package `patina:mods`) versions this build runs: a mod
 /// built for any 0.1.x SDK.
 pub const API: &str = "0.1";
 /// The manifest `api` lines this build loads. 0.2 is 0.1 plus content:
-/// `assets/` and `data/` in the `.hmod`, with blocks and items declared in
+/// `assets/` and `data/` in the `.pmod`, with blocks and items declared in
 /// `data/<id>/patina/` (docs/modpacks.md). Code still links API 0.1.
 /// 0.3 is a server mod (experimental): the `patina-server-mod` world.
 pub const APIS: [&str; 3] = [API, "0.2", SERVER_API];
@@ -86,7 +86,7 @@ pub enum Capability {
     /// New blocks and items from the mod's `data/` (API 0.2): no WIT
     /// interface, the game reads them before the world loads.
     Registries,
-    /// A screen the mod owns and a settings page in Options > Mods, drawn
+    /// A screen the mod owns and a settings page, drawn
     /// with the menus' own widgets (interface `ui`, calls `ui-events`).
     Ui,
     /// Shapes on the HUD and the camera's shake, drawn by the game's own
@@ -319,7 +319,7 @@ pub struct Package {
     pub wasm: Option<Vec<u8>>,
 }
 impl Package {
-    /// A `.hmod` (a zip holding `patina-mod.toml`, `mod.wasm` and, for
+    /// A `.pmod` (a zip holding `patina-mod.toml`, `mod.wasm` and, for
     /// content, `assets/` and `data/`) or a folder holding the same.
     pub fn read(path: &Path) -> Result<Self, String> {
         let (toml, wasm) = if path.is_dir() {
@@ -360,11 +360,11 @@ impl Package {
         }
         Ok(Package { manifest, wasm })
     }
-    /// The `.hmod` bytes for `manifest_text` and a component.
+    /// The `.pmod` bytes for `manifest_text` and a component.
     pub fn write(manifest_text: &str, wasm: &[u8]) -> Result<Vec<u8>, String> {
         Self::write_files(manifest_text, Some(wasm), &[])
     }
-    /// The `.hmod` bytes for `manifest_text`, a component if the mod has
+    /// The `.pmod` bytes for `manifest_text`, a component if the mod has
     /// code, and content `files` (`assets/...`, `data/...`) by path.
     pub fn write_files(
         manifest_text: &str,
@@ -392,7 +392,7 @@ impl Package {
     }
 }
 
-/// The `.hmod` files and mod folders in `dir`, by name.
+/// The `.pmod` files and mod folders in `dir`, by name.
 pub fn find(dir: &Path) -> Vec<PathBuf> {
     let Ok(read) = std::fs::read_dir(dir) else {
         return Vec::new();
@@ -400,7 +400,7 @@ pub fn find(dir: &Path) -> Vec<PathBuf> {
     let mut found: Vec<PathBuf> = read
         .flatten()
         .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|e| e == "hmod") || p.join(MANIFEST).is_file())
+        .filter(|p| p.extension().is_some_and(|e| e == "pmod") || p.join(MANIFEST).is_file())
         .collect();
     found.sort();
     found
@@ -500,10 +500,10 @@ capabilities = ["game-read", "hud"]
     }
 
     #[test]
-    fn hmod_round_trips() {
+    fn pmod_round_trips() {
         let dir = std::env::temp_dir().join(format!("patina-mods-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("coords_hud.hmod");
+        let path = dir.join("coords_hud.pmod");
         std::fs::write(&path, Package::write(EXAMPLE, b"\0asm").unwrap()).unwrap();
         let p = Package::read(&path).unwrap();
         assert_eq!(p.manifest.id, "coords_hud");

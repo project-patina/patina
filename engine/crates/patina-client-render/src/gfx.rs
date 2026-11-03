@@ -94,7 +94,7 @@ mod pack_timing;
 pub mod pack_uniforms;
 mod pack_weather;
 mod page_runs;
-pub mod panorama;
+pub mod backdrop;
 mod readback;
 mod resident;
 mod stars;
@@ -240,7 +240,7 @@ pub struct Frame<'a> {
     /// Skip sections the camera cannot see through open faces (vanilla's
     /// occlusion graph; off in spectator-like views inside blocks).
     pub cave_culling: bool,
-    /// Title screen: only the dedicated panorama cube map and the HUD.
+    /// Title screen: only the title background and the HUD.
     pub title: bool,
     /// Lava, powder snow, blindness or darkness blocks the sky pass.
     pub sky_blocked: bool,
@@ -453,7 +453,9 @@ pub struct Renderer {
     stars: stars::Stars,
     /// The glowing entities' outline (`LevelRenderer.entityOutlineTarget`).
     entity_outline: entity_outline::EntityOutline,
-    panorama: panorama::Panorama,
+    backdrop: backdrop::Backdrop,
+    /// The boot splash is up: it sits on plain black, not the title background.
+    pub splash_showing: bool,
     /// `RenderPipelines.WORLD_BORDER` and its buffers.
     border_pipeline: wgpu::RenderPipeline,
     border_group: wgpu::BindGroup,
@@ -607,8 +609,6 @@ pub struct Renderer {
     pub screenshot_result: Option<std::result::Result<[u32; 2], String>>,
     /// Brightness option (lightmap gamma), 0..1.
     pub gamma: f32,
-    /// Optional full-light lightmap (Patina Extras).
-    pub fullbright: bool,
     /// Advance animated block textures (Patina setting; vanilla always does).
     pub animated_textures: bool,
     present_modes: Vec<wgpu::PresentMode>,
@@ -1171,7 +1171,6 @@ impl Renderer {
         glint: (&[u8], u32, u32),
         glint_armor: (&[u8], u32, u32),
         forcefield: (&[u8], u32),
-        panorama_faces: &panorama::Faces,
         prepared: Option<PreparedTextures>,
         previous: Option<&Self>,
         api: GraphicsApi,
@@ -2675,12 +2674,7 @@ impl Renderer {
             (&entity_shader, &entity_layout, &entity_vertex),
             config.format.remove_srgb_suffix(),
         );
-        let panorama = panorama::Panorama::new(
-            &device,
-            &queue,
-            config.format.remove_srgb_suffix(),
-            panorama_faces,
-        );
+        let backdrop = backdrop::Backdrop::new(&device, &queue, config.format.remove_srgb_suffix());
         if previous.is_none() {
             startup_step(format_args!(
                 "pipelines ready (multi-draw {}, occlusion culling {}, GPU timer {})",
@@ -2753,7 +2747,8 @@ impl Renderer {
             end_sky: end_sky::EndSky::default(),
             stars,
             entity_outline,
-            panorama,
+            backdrop,
+            splash_showing: false,
             border_pipeline,
             border_group,
             border_uniform,
@@ -2848,7 +2843,6 @@ impl Renderer {
             screenshot: None,
             screenshot_result: None,
             gamma: 0.5,
-            fullbright: false,
             animated_textures: true,
             present_modes,
         })
@@ -2877,6 +2871,10 @@ impl Renderer {
             contents: bytemuck::cast_slice(&indices),
             usage: wgpu::BufferUsages::INDEX,
         })
+    }
+    /// See `HudRenderer::filter_atlas_linearly`.
+    pub fn filter_hud_linearly(&mut self) {
+        self.hud.filter_atlas_linearly(&self.device);
     }
     fn offscreen_target(
         device: &wgpu::Device,
@@ -3759,9 +3757,6 @@ impl Renderer {
                 pixels[i + 3] = 255;
             }
         }
-        if self.fullbright {
-            pixels.fill(255);
-        }
         // The lightmap changes with the time of day, flicker and effects,
         // not every frame: upload only what differs from the texture.
         if pixels == self.lightmap_pixels && self.lightmap_uploaded {
@@ -3917,12 +3912,13 @@ impl Renderer {
             frame.camera,
         ) * view_proj;
         if frame.title {
-            self.panorama.prepare(
+            // A title frame's yaw carries the background's clock.
+            self.backdrop.prepare(
+                &self.device,
                 &self.queue,
                 self.config.width,
                 self.config.height,
                 frame.yaw,
-                frame.pitch,
             );
         }
         let view = views.primary().view;
@@ -4955,8 +4951,10 @@ impl Renderer {
                     }
                 }
                 if frame.title {
-                    self.panorama.draw(&mut pass);
-                    pass.set_bind_group(0, &self.group, &[]);
+                    if !self.splash_showing {
+                        self.backdrop.draw(&mut pass);
+                        pass.set_bind_group(0, &self.group, &[]);
+                    }
                 } else if celestial_vertices > 0 || frame.end_sky {
                     pass.set_pipeline(&self.celestial_pipeline);
                     pass.set_bind_group(0, &self.entity_group, &[]);

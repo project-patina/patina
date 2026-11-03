@@ -7,6 +7,132 @@ use crate::{
 };
 use std::{collections::HashMap, path::Path, sync::RwLock, time::Instant};
 
+/// The Patina accent, `#3fb8a0`.
+pub const ACCENT: u32 = rgba(63, 184, 160, 255);
+/// The dark of every Patina panel, at an alpha.
+pub const fn panel_color(alpha: u8) -> u32 {
+    rgba(10, 13, 15, alpha)
+}
+/// One screen pixel at low GUI scales, about half a GUI pixel from there on.
+pub fn hairline(batch: &HudBatch) -> f32 {
+    (batch.scale / 2.0).round().max(1.0) / batch.scale
+}
+/// A filled rectangle with a thin edge, the Patina look of a control.
+pub fn plate(batch: &mut HudBatch, atlas: &HudAtlas, r: [f32; 4], fill: u32, edge: u32) {
+    let [x, y, w, h] = r;
+    let line = hairline(batch);
+    batch.fill(atlas, x, y, w, h, fill);
+    batch.fill(atlas, x, y, w, line, edge);
+    batch.fill(atlas, x, y + h - line, w, line, edge);
+    batch.fill(atlas, x, y + line, line, h - 2.0 * line, edge);
+    batch.fill(atlas, x + w - line, y + line, line, h - 2.0 * line, edge);
+}
+/// The Fabric mod's (`PatinaMenu`) widget colours.
+const FILL: u32 = rgba(12, 16, 18, 160);
+const FILL_HOVER: u32 = rgba(20, 28, 30, 192);
+const FILL_DISABLED: u32 = rgba(16, 18, 20, 112);
+const BORDER: u32 = rgba(255, 255, 255, 96);
+const BORDER_DISABLED: u32 = rgba(255, 255, 255, 40);
+/// The colours of a Patina button: fill, edge and label.
+pub fn button_colors(active: bool, hover: bool) -> (u32, u32, u32) {
+    if !active {
+        (FILL_DISABLED, BORDER_DISABLED, rgba(160, 160, 160, 255))
+    } else if hover {
+        (FILL_HOVER, ACCENT, u32::MAX)
+    } else {
+        (FILL, BORDER, u32::MAX)
+    }
+}
+/// `PatinaMenu.box`: a fill and a one GUI pixel outline, as `graphics.outline` draws it.
+fn boxed(batch: &mut HudBatch, atlas: &HudAtlas, [x, y, w, h]: [f32; 4], fill: u32, edge: u32) {
+    batch.fill(atlas, x, y, w, h, fill);
+    batch.fill(atlas, x, y, w, 1.0, edge);
+    batch.fill(atlas, x, y + h - 1.0, w, 1.0, edge);
+    batch.fill(atlas, x, y + 1.0, 1.0, h - 2.0, edge);
+    batch.fill(atlas, x + w - 1.0, y + 1.0, 1.0, h - 2.0, edge);
+}
+/// The widget sprites every screen shares, drawn in the Patina look instead
+/// of vanilla's texture, whichever screen asks for them, as `PatinaMenu`
+/// draws them. False for other sprites.
+fn themed(batch: &mut HudBatch, atlas: &HudAtlas, sprite: &str, r: [f32; 4]) -> bool {
+    let [x, y, w, h] = r;
+    let Some(widget) = sprite.strip_prefix("gui/sprites/") else {
+        return false;
+    };
+    match widget {
+        "widget/button" | "widget/button_highlighted" | "widget/button_disabled" => {
+            let (fill, edge, _) = button_colors(
+                widget != "widget/button_disabled",
+                widget == "widget/button_highlighted",
+            );
+            boxed(batch, atlas, r, fill, edge);
+        }
+        "widget/slider" => boxed(batch, atlas, r, FILL, BORDER),
+        "widget/slider_highlighted" => boxed(batch, atlas, r, FILL_HOVER, ACCENT),
+        "widget/slider_handle" => batch.fill(atlas, x, y, w, h, rgba(216, 226, 224, 255)),
+        "widget/slider_handle_highlighted" => batch.fill(atlas, x, y, w, h, ACCENT),
+        "widget/text_field" => boxed(batch, atlas, r, rgba(8, 10, 12, 192), BORDER),
+        "widget/text_field_highlighted" => boxed(batch, atlas, r, rgba(8, 10, 12, 192), ACCENT),
+        "widget/checkbox" => boxed(batch, atlas, r, FILL, BORDER),
+        "widget/checkbox_highlighted" => boxed(batch, atlas, r, FILL_HOVER, ACCENT),
+        "widget/checkbox_selected" | "widget/checkbox_selected_highlighted" => {
+            let edge = if widget.ends_with("highlighted") {
+                ACCENT
+            } else {
+                BORDER
+            };
+            boxed(batch, atlas, r, FILL, edge);
+            let inset = (w / 4.0).floor().max(3.0);
+            batch.fill(
+                atlas,
+                x + inset,
+                y + inset,
+                w - 2.0 * inset,
+                h - 2.0 * inset,
+                ACCENT,
+            );
+        }
+        "widget/scroller" => batch.fill(atlas, x, y, w, h, rgba(255, 255, 255, 0x90)),
+        "widget/scroller_background" => batch.fill(atlas, x, y, w, h, rgba(0, 0, 0, 0x40)),
+        "widget/tab" => batch.fill(atlas, x, y, w, h, rgba(0, 0, 0, 0x60)),
+        "widget/tab_highlighted" => batch.fill(atlas, x, y, w, h, FILL_HOVER),
+        "widget/tab_selected" | "widget/tab_selected_highlighted" => {
+            batch.fill(atlas, x, y, w, h, FILL_HOVER);
+            batch.fill(atlas, x, y + h - 2.0, w, 2.0, ACCENT);
+        }
+        _ => return false,
+    }
+    true
+}
+/// The dirt-free backdrops of the menus, in place of vanilla's tiled
+/// textures, and the lines that replace its separators.
+fn themed_background(
+    batch: &mut HudBatch,
+    atlas: &HudAtlas,
+    sprite: &str,
+    [x, y, w, h]: [f32; 4],
+) -> bool {
+    let line = rgba(255, 255, 255, 0x30);
+    let fill = match sprite {
+        "gui/menu_background" => rgba(10, 14, 16, 0xA8),
+        "gui/inworld_menu_background" => rgba(10, 14, 16, 0x90),
+        "gui/menu_list_background"
+        | "gui/inworld_menu_list_background"
+        | "gui/tab_header_background" => rgba(0, 0, 0, 0x50),
+        "gui/header_separator" | "gui/inworld_header_separator" => {
+            batch.fill(atlas, x, y + h - 1.0, w, 1.0, line);
+            return true;
+        }
+        "gui/footer_separator" | "gui/inworld_footer_separator" => {
+            batch.fill(atlas, x, y, w, 1.0, line);
+            return true;
+        }
+        _ => return false,
+    };
+    batch.fill(atlas, x, y, w, h, fill);
+    true
+}
+
 /// `GuiSpriteScaling.NineSlice`: the sprite's size in GUI pixels, whatever
 /// its texture's resolution, its borders (left, top, right, bottom) in the
 /// same units, and whether the edges and centre stretch rather than tile.
@@ -152,6 +278,9 @@ pub fn nine_slice(
     h: f32,
     color: u32,
 ) {
+    if themed(batch, atlas, sprite, [x, y, w, h]) {
+        return;
+    }
     if let Some(r) = atlas.sprites.get(sprite) {
         draw_nine_slice(batch, *r, scaling(sprite, r), [x, y, w, h], color);
     }
@@ -169,6 +298,9 @@ pub fn blit_sprite(
     h: f32,
     color: u32,
 ) {
+    if themed(batch, atlas, sprite, [x, y, w, h]) {
+        return;
+    }
     if let Some(r) = atlas.sprites.get(sprite) {
         draw_sprite(batch, *r, nine_slice_metadata(sprite), [x, y, w, h], color);
     }
@@ -276,6 +408,9 @@ pub fn tiled_sized(
     size: [f32; 2],
     color: u32,
 ) {
+    if themed_background(batch, atlas, sprite, [x, y, w, h]) {
+        return;
+    }
     let Some(r) = atlas.sprites.get(sprite).copied() else {
         return;
     };
@@ -440,8 +575,7 @@ fn slider_sprites(hover: bool, active: bool, dragging: bool) -> (&'static str, &
 pub fn slider_value(x: f32, w: f32, cx: f32) -> f32 {
     ((cx - (x + 4.0)) / (w - 8.0)).clamp(0.0, 1.0)
 }
-/// Screen.renderMenuBackground: in a world the translucent dark texture,
-/// otherwise the dirt-like menu texture, tiled at 32 pixels.
+/// Screen.renderMenuBackground: a translucent dark panel, lighter in a world.
 pub fn menu_background(
     batch: &mut HudBatch,
     atlas: &HudAtlas,
@@ -456,11 +590,7 @@ pub fn menu_background(
     } else {
         "gui/menu_background"
     };
-    if atlas.sprites.contains_key(sprite) {
-        tiled(batch, atlas, sprite, x, y, w, h, 32.0, u32::MAX);
-    } else {
-        batch.fill(atlas, x, y, w, h, rgba(0, 0, 0, 160));
-    }
+    tiled(batch, atlas, sprite, x, y, w, h, 32.0, u32::MAX);
 }
 /// Header and footer separators of list screens.
 pub fn separators(

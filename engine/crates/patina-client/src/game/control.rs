@@ -121,7 +121,6 @@ impl Game<'_> {
             self.answer(request, event_loop);
         }
         while let Some(request) = self.control.as_ref().and_then(|c| c.try_recv()) {
-            self.agent_command_seen();
             self.answer(request, event_loop);
             if self.pending_save.is_some() {
                 break;
@@ -129,11 +128,6 @@ impl Game<'_> {
         }
         if self.control.is_some() {
             self.watch_events();
-        }
-        if self.screen == Screen::Options
-            && self.ui.options.page() == patina_client::options_ui::Page::Agent
-        {
-            self.ui.options.agent_status = self.agent_status_lines();
         }
     }
 
@@ -184,9 +178,6 @@ impl Game<'_> {
         if let Some(value) = self.lan_control(&words)? {
             return Ok(Some(value));
         }
-        if let Some(value) = self.friends_control(&words)? {
-            return Ok(Some(value));
-        }
         match self.agent_command(&words, line, reply, event_loop)? {
             super::agent::Handled::Reply(value) => return Ok(Some(value)),
             super::agent::Handled::Deferred => return Ok(None),
@@ -198,7 +189,6 @@ impl Game<'_> {
                 .chain(super::station_control::HELP)
                 .chain(super::blockctl::HELP)
                 .chain(super::lan::HELP)
-                .chain(super::friends::HELP)
                 .chain(super::render_control::HELP)
                 .chain(super::sculk::HELP)
                 .chain(super::agent::HELP)
@@ -676,15 +666,9 @@ impl Game<'_> {
                     "language" => Page::Language,
                     "font" => Page::Font,
                     "packs" => Page::Packs,
-                    "mods" => Page::Mods,
                     "shader-packs" => Page::ShaderPacks,
-                    "graphics" => Page::Graphics,
-                    "graphics-advanced" => Page::GraphicsAdvanced,
-                    "graphics-hdr" => Page::GraphicsHdr,
-                    "extras" => Page::Extras,
                     "credits" => Page::Credits,
-                    "patina" => Page::Patina,
-                    "agent" => Page::Agent,
+                    "client" => Page::Client,
                     other => return Err(format!("unknown options page {other}").into()),
                 };
                 if self.screen == Screen::Playing && self.title.is_none() {
@@ -891,7 +875,6 @@ impl Game<'_> {
             Screen::Stats => "stats",
             Screen::Advancements => "advancements",
             Screen::WorldOptions => "world-options",
-            Screen::Friends => "friends",
             Screen::ServerLinks => "server-links",
             Screen::ConfirmLink => "confirm-link",
             Screen::DialogWarning => "dialog-warning",

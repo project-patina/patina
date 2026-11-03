@@ -13,6 +13,9 @@ pub enum Cursor {
     Arrow,
     PointingHand,
     NotAllowed,
+    /// `RESIZE_ALL`: something to drag.
+    Move,
+    Crosshair,
 }
 
 thread_local! {

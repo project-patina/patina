@@ -1,0 +1,17 @@
+{
+	"schemaVersion": 1,
+	"id": "patina",
+	"version": "${version}",
+	"name": "Patina Client",
+	"description": "The Patina loading animation, menus and built-in mods.",
+	"authors": ["Patina"],
+	"license": "MIT",
+	"icon": "assets/patina/icon.png",
+	"environment": "client",
+	"mixins": ["patina.mixins.json"],
+	"depends": {
+		"fabricloader": ">=0.18.0",
+		"minecraft": "~26.3",
+		"java": ">=25"
+	}
+}

@@ -1,5 +1,5 @@
 //! A shader pack on disk: a folder holding `patina-shaders.toml`, or the
-//! same files zipped as a `.hshader` (what the registry and the launcher
+//! same files zipped as a `.pshader` (what the registry and the launcher
 //! carry). Both read into one [`Pack`].
 use crate::manifest::{MANIFEST, Manifest};
 use std::{
@@ -9,12 +9,12 @@ use std::{
 };
 
 /// A packaged pack's extension.
-pub const EXTENSION: &str = "hshader";
+pub const EXTENSION: &str = "pshader";
 /// Bytes per WGSL file, per other file, and in all.
 pub const MAX_WGSL: u64 = 256 << 10;
 const MAX_OTHER: u64 = 1 << 20;
 pub const MAX_TOTAL: u64 = 8 << 20;
-/// Files in a `.hshader`.
+/// Files in a `.pshader`.
 const MAX_ENTRIES: usize = 512;
 /// Files a pack may hold beside its manifest and WGSL.
 const EXTRAS: [&str; 5] = [
@@ -25,7 +25,7 @@ const EXTRAS: [&str; 5] = [
     "icon.png",
 ];
 
-/// A pack read from a folder or a `.hshader`: its manifest and every file,
+/// A pack read from a folder or a `.pshader`: its manifest and every file,
 /// by path from the pack's root (`/`-separated).
 #[derive(Debug)]
 pub struct Pack {
@@ -47,14 +47,14 @@ pub fn plain_path(path: &str) -> bool {
 }
 
 /// Whether `path` is a pack of this format: a folder holding
-/// `patina-shaders.toml`, or a `.hshader` file.
+/// `patina-shaders.toml`, or a `.pshader` file.
 pub fn is_pack(path: &Path) -> bool {
     path.join(MANIFEST).is_file()
         || (path.is_file() && path.extension().is_some_and(|e| e == EXTENSION))
 }
 
 impl Pack {
-    /// Reads `path`: a `.hshader` file, or a folder (its hidden files and
+    /// Reads `path`: a `.pshader` file, or a folder (its hidden files and
     /// folders, such as `.git`, are skipped).
     pub fn read(path: &Path) -> Result<Pack, String> {
         let mut files = BTreeMap::new();
@@ -139,7 +139,7 @@ impl Pack {
             .and_then(|b| std::str::from_utf8(b).ok())
     }
 
-    /// The `.hshader` bytes: the files in path order, with fixed times and
+    /// The `.pshader` bytes: the files in path order, with fixed times and
     /// permissions, so the same pack always gives the same bytes (and the
     /// same SHA-256).
     pub fn package(&self) -> Result<Vec<u8>, String> {

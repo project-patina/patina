@@ -1,0 +1,20 @@
+{
+	"patina.settings.edit": "Edytuj położenie HUD",
+	"patina.editor.reset": "Przywróć",
+	"patina.editor.hint": "Przeciągnij, by przesunąć; kółko lub róg: rozmiar",
+	"patina.mod.fps": "Licznik FPS",
+	"patina.mod.keystrokes": "Klawisze",
+	"patina.mod.coordinates": "Współrzędne",
+	"patina.option.accuracy": "Dokładność",
+	"patina.option.accuracy.whole": "Całkowite",
+	"patina.option.accuracy.precise": "Dokładne",
+	"patina.option.style": "Styl",
+	"patina.option.style.text": "Tekst",
+	"patina.option.style.panel": "Panel",
+	"patina.keystrokes.left": "LPM",
+	"patina.keystrokes.right": "PPM",
+	"patina.facing.north": "Północ",
+	"patina.facing.south": "Południe",
+	"patina.facing.west": "Zachód",
+	"patina.facing.east": "Wschód"
+}

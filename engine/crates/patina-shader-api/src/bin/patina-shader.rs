@@ -2,12 +2,12 @@
 //!
 //! - `new <dir> [--template post|sky|material] [--name "Name"]`: a pack from a template.
 //! - `check <pack>... [--json]`: the check the game, the launcher and the registry run.
-//! - `pack <dir> [--out <file.hshader>]`: check, then write the reproducible `.hshader`.
+//! - `pack <dir> [--out <file.pshader>]`: check, then write the reproducible `.pshader`.
 use patina_shader_api::{EXTENSION, MANIFEST, Pack, Problem, check, package::sha256_hex};
 use serde::Serialize;
 use std::{path::Path, process::ExitCode};
 
-const USAGE: &str = "usage: patina-shader new <dir> [--template post|sky|material] [--name \"Name\"] | check <pack>... [--json] | pack <dir> [--out <file.hshader>]";
+const USAGE: &str = "usage: patina-shader new <dir> [--template post|sky|material] [--name \"Name\"] | check <pack>... [--json] | pack <dir> [--out <file.pshader>]";
 
 /// (template, its files as (name, text)).
 const TEMPLATES: [(&str, [(&str, &str); 2]); 3] = [
@@ -150,7 +150,7 @@ struct CheckJson {
     id: Option<String>,
     version: Option<String>,
     api: Option<String>,
-    /// The file's own SHA-256 (a `.hshader`), else the reproducible package's.
+    /// The file's own SHA-256 (a `.pshader`), else the reproducible package's.
     sha256: Option<String>,
     stages: Vec<StageJson>,
     problems: Vec<ProblemJson>,

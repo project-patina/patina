@@ -49,7 +49,7 @@ pub fn valid_id(id: &str) -> bool {
 
 pub fn path(ctx: &Ctx, store: Store, id: &str) -> Result<PathBuf> {
     if !valid_id(id) {
-        bail!("Niepoprawny identyfikator obrazu");
+        bail!("Niepoprawny identyfikator obrazu", "Invalid image id");
     }
     Ok(store.dir(ctx).join(id))
 }
@@ -77,17 +77,17 @@ pub fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
 pub fn import(ctx: &Ctx, store: Store, src: &Path) -> Result<Image> {
     let ext = src.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     if !store.exts().contains(&ext.as_str()) {
-        bail!("Nieobsługiwany format pliku (.{ext})");
+        bail!("Nieobsługiwany format pliku (.{ext})", "Unsupported file format (.{ext})");
     }
     let meta = std::fs::metadata(src)?;
     if meta.len() > MAX_BYTES {
-        bail!("Plik jest za duży (maks. 30 MB)");
+        bail!("Plik jest za duży (maks. 30 MB)", "The file is too large (30 MB at most)");
     }
     let bytes = std::fs::read(src)?;
     if store == Store::Skins {
         match png_size(&bytes) {
             Some((64, 64)) | Some((64, 32)) => {}
-            _ => bail!("Skin musi być plikiem PNG 64×64 (lub starym 64×32)"),
+            _ => bail!("Skin musi być plikiem PNG 64×64 (lub starym 64×32)", "A skin must be a 64×64 PNG file (or an old 64×32 one)"),
         }
     }
     let id = format!("{}.{ext}", uuid::Uuid::new_v4().simple());

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use amethyst_core::content::{self, ContentItem, ContentKind};
 use amethyst_core::instance::Instance;
 use amethyst_core::modrinth::{self, Installed, Project, SearchQuery, SearchResult, Update, Version};
+use amethyst_core::official_mods::{self, Catalog};
 use amethyst_core::Result;
 use tauri::{AppHandle, State};
 use tokio_util::sync::CancellationToken;
@@ -83,4 +84,34 @@ pub async fn import_content(state: State<'_, AppState>, id: String, kind: Conten
 pub async fn check_content_updates(state: State<'_, AppState>, id: String, kind: ContentKind) -> Result<Vec<Update>> {
     let inst = Instance::load(&state.ctx, &id)?;
     modrinth::check_updates(&state.ctx, &inst, kind).await
+}
+
+#[tauri::command]
+pub async fn official_mods(state: State<'_, AppState>, id: String) -> Result<Catalog> {
+    let inst = Instance::load(&state.ctx, &id)?;
+    official_mods::catalog(&state.ctx, &inst, &official_mods::source()).await
+}
+
+#[tauri::command]
+pub async fn install_official_mod(state: State<'_, AppState>, id: String, mod_id: String) -> Result<()> {
+    let inst = Instance::load(&state.ctx, &id)?;
+    official_mods::install(&state.ctx, &inst, &official_mods::source(), &mod_id).await
+}
+
+#[tauri::command]
+pub fn remove_official_mod(state: State<'_, AppState>, id: String, mod_id: String) -> Result<()> {
+    let inst = Instance::load(&state.ctx, &id)?;
+    official_mods::remove(&state.ctx, &inst, &mod_id)
+}
+
+/// The Servers page's list of well-known servers.
+#[tauri::command]
+pub fn servers_list() -> Vec<amethyst_core::servers::Server> {
+    amethyst_core::servers::POPULAR.to_vec()
+}
+
+/// The server list ping of `address`: offline when it does not answer.
+#[tauri::command]
+pub async fn server_ping(address: String) -> Result<amethyst_core::servers::Status> {
+    amethyst_core::servers::ping(&address).await
 }

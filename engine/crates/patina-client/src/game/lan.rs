@@ -1256,9 +1256,6 @@ impl Game<'_> {
                 Some(server) => server.call(|g| g.unpublish()).unwrap_or(false),
                 None => self.unpublish(),
             };
-            if closed {
-                self.friends_lan_closed();
-            }
             if closed && announce && self.integrated.is_some() {
                 self.system_message(Text::translate(
                     "menu.multiplayerOptions.publish.stopped",
@@ -1267,7 +1264,6 @@ impl Game<'_> {
             }
             return;
         }
-        self.friends_lan_closed();
         let Some(mut host) = self.lan.take() else {
             return;
         };

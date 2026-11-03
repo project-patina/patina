@@ -33,6 +33,11 @@ their package licenses. This notice highlights bundled artwork and vendored code
 it is not a complete dependency bill of materials. Binary-release maintainers
 must review licenses for the dependencies included in their selected build.
 
+## Gradle wrapper
+
+`java-mod/gradlew`, `gradlew.bat` and `gradle/wrapper/gradle-wrapper.jar` come from
+[Gradle](https://gradle.org) 9.8.2 under the Apache License 2.0.
+
 ## Demonstration graphics and game content
 
 `src/lib/demo/*.svg` are original geometric Patina fixtures under the root MIT

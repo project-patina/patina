@@ -275,6 +275,11 @@ impl Game<'_> {
         let context = pack.context.clone();
         self.pack = pack;
         self.gui = gui;
+        // The new atlas holds none of the downloaded skins and capes: free
+        // their slots so each is uploaded again, instead of players drawing
+        // with a texture that is gone (invisible, or Steve's arm in first
+        // person) after a server's resource pack.
+        self.skin_slots = patina_client::skins::SkinSlots::new(patina_client::hud::SKIN_SLOTS);
         // The atlas's sprites moved: the particle engine re-reads every rect
         // and the packs' sprite sets, or every particle draws a stale region.
         self.particles
@@ -334,7 +339,6 @@ pub(super) fn stage_pack(
     atlas.font.japanese = japanese;
     let gui = UiResources {
         atlas,
-        panorama: Arc::new(patina_client::gfx::panorama::Faces::load(&root)),
     };
     progress.set(2);
     let pack = PackResources::load(

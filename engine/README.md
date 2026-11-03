@@ -46,8 +46,33 @@ generated resources; a source-only CI check is not the full parity suite.
 - `third_party/wgpu-hal/`: vendored graphics code, MIT OR Apache-2.0.
 - `crates/patina-theme/fonts/`: bundled fonts with individual OFL notices.
 
-Review inherited telemetry, multiplayer and native-mod functionality when
-distributing a build. The [root README](../README.md) covers launcher development.
+Review inherited native-mod functionality when distributing a build. The
+[root README](../README.md) covers launcher development.
+
+## Client changes on top of the inherited engine
+
+- Start-up shows `crates/patina-client-render/src/boot_splash.rs`: a black screen
+  with Patina's animation (`crates/patina-theme/splash/`, made by
+  `scripts/render-splash.mjs`) until the title screen is ready. No Mojang logo is
+  drawn. `PATINA_SPLASH_SHOTS=<folder>` saves its frames, for testing.
+- The title screen's buttons are drawn by code (`menu_button` in
+  `crates/patina-client/src/title.rs`), and it names the client's version: the
+  launcher's workspace version (`crates/patina-core/build.rs`), or `PATINA_VERSION`.
+- Options is vanilla's. Far terrain, resolution scale, anti-aliasing, HDR, battery mode, the
+  graphics API and the FPS overlay are rows in Video Settings; controllers hang off Controls.
+  `.pmod` mods load from `patina-mods/` as `patina-mods.txt` lists them, with no screen.
+- No friends sharing, relay, Discord presence, mod registry, or "I'm playing" ping.
+  `patina-telemetry` stays for local crash and performance summaries, and sends
+  nothing unless `PATINA_TELEMETRY_URL` names a server. `patina-server` has no update
+  source and `crates/patina-release-sign/release-keys.txt` lists no key until Patina
+  publishes server builds.
+
+## Mods
+
+The client loads content mods from `patina-mods/*.pmod` in the game folder (`*.pmod`
+zip files, or unpacked folders with their manifest), off unless `patina-mods.txt` turns
+them on; the client has no screen for them. Modpacks are `.ppack` files
+and shader packages `.pshader`.
 
 ## License
 

@@ -1,4 +1,4 @@
-//! Shader packs: the one picked on Options > Patina Settings > Shader Packs, or
+//! Shader packs: the one picked on the Shader Packs page, or
 //! `PATINA_SHADER_PACK=<name>` (development; it wins over the pick), runs `shaderpacks/<name>`
 //! (a folder or a zip beside `options.txt`) over the world; Patina's own packs go to
 //! `game/native_shaders.rs`. The programs of the current dimension's folder are loaded when the

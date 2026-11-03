@@ -3,8 +3,7 @@
 //! level it arrived at; a Patina serves every level up to its [`LEVEL`].
 //! A mod needs the level of the newest function it imports, so a mod that
 //! calls a function this Patina doesn't have is refused with "update
-//! Patina" instead of a linking error, and the registry lists each
-//! version's level so the launcher can tell before it installs.
+//! Patina" instead of a linking error.
 
 /// The newest level this Patina serves.
 pub const LEVEL: u32 = 7;
@@ -116,44 +115,6 @@ pub fn too_new(level: u32, function: Option<&str>) -> Option<String> {
         let uses = function.map_or(String::new(), |f| format!(" (it uses {f})"));
         format!("made for a newer Patina{uses}: update Patina to run it")
     })
-}
-
-/// The functions a mod's component imports from Patina (`patina:mods/*`),
-/// as `interface.function`, in the component's order.
-#[cfg(feature = "index")]
-pub fn imports(wasm: &[u8]) -> Result<Vec<String>, String> {
-    use wasmparser::{
-        Parser, Payload, Validator, WasmFeatures, component_types::ComponentEntityType,
-    };
-    let types = Validator::new_with_features(WasmFeatures::all())
-        .validate_all(wasm)
-        .map_err(|e| format!("not a component: {e}"))?;
-    let types = types.as_ref();
-    let mut out = Vec::new();
-    for payload in Parser::new(0).parse_all(wasm) {
-        let Payload::ComponentImportSection(section) = payload.map_err(|e| e.to_string())? else {
-            continue;
-        };
-        for import in section {
-            let name = import.map_err(|e| e.to_string())?.name.name;
-            // `patina:mods/render@0.1.0` → `render`.
-            let Some(interface) = name.strip_prefix("patina:mods/") else {
-                continue;
-            };
-            let interface = interface.split('@').next().unwrap_or(interface);
-            let Some(item) = types.component_item_for_import(name) else {
-                continue;
-            };
-            if let ComponentEntityType::Instance(id) = item.ty {
-                for (function, export) in &types[id].exports {
-                    if matches!(export.ty, ComponentEntityType::Func(_)) {
-                        out.push(format!("{interface}.{function}"));
-                    }
-                }
-            }
-        }
-    }
-    Ok(out)
 }
 
 #[cfg(test)]

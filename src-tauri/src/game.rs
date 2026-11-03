@@ -1,5 +1,6 @@
 //! Install + launch pipeline as seen by the UI: progress, logs and state events.
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use amethyst_core::accounts;
@@ -7,7 +8,7 @@ use amethyst_core::instance::Instance;
 use amethyst_core::launch::{self, Player};
 use amethyst_core::loaders::Loader;
 use amethyst_core::progress::Reporter;
-use amethyst_core::{bail, engine, install, modrinth, Error, Result};
+use amethyst_core::{bail, engine, install, lang, modrinth, patina_mod, tr, Error, Result};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_util::sync::CancellationToken;
@@ -46,18 +47,22 @@ fn main_window(app: &AppHandle) -> Option<tauri::WebviewWindow> {
 }
 
 #[tauri::command]
-pub fn launch(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<()> {
+/// `join`: a server to join once the game is up, for this start only (the Servers page).
+pub fn launch(app: AppHandle, state: State<'_, AppState>, id: String, join: Option<String>) -> Result<()> {
     let cancel = CancellationToken::new();
     {
         // Keep one lock order everywhere: installs, then running. Reserving the
         // instance must be atomic with respect to edits, deletion and launch.
         let mut installs = state.installs.lock().unwrap();
         let running = state.running.lock().unwrap();
+        if state.updating.load(Ordering::SeqCst) {
+            bail!("Trwa aktualizacja launchera. Gra uruchomi się po jej zakończeniu i restarcie.", "The launcher is updating. The game can start after the update and a restart.");
+        }
         if running.contains_key(&id) {
-            bail!("Ta instancja już działa");
+            bail!("Ta instancja już działa", "This instance is already running");
         }
         if installs.contains_key(&id) {
-            bail!("Ta instancja jest właśnie przygotowywana");
+            bail!("Ta instancja jest właśnie przygotowywana", "This instance is being prepared");
         }
         Instance::load(&state.ctx, &id)?;
         installs.insert(id.clone(), cancel.clone());
@@ -72,7 +77,7 @@ pub fn launch(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<
     }
     emit_state(&app, &id, "preparing", None, None);
     tauri::async_runtime::spawn(async move {
-        let res = run_game(&app, &id, cancel).await;
+        let res = run_game(&app, &id, join, cancel).await;
         let st = app.state::<AppState>();
         st.installs.lock().unwrap().remove(&id);
         st.running.lock().unwrap().remove(&id);
@@ -87,7 +92,7 @@ pub fn launch(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<
             Err(Error::Cancelled) => emit_state(&app, &id, "cancelled", None, None),
             Err(e) => {
                 log::error!("launch {id} failed: {e}");
-                log(&app, &id, format!("[Patina] Błąd: {e}"), true);
+                log(&app, &id, tr!("[Patina] Błąd: {e}", "[Patina] Error: {e}"), true);
                 emit_state(&app, &id, "error", Some(e.to_string()), None);
             }
         }
@@ -102,7 +107,7 @@ struct GameExit {
     game_dir: std::path::PathBuf,
 }
 
-async fn run_game(app: &AppHandle, id: &str, cancel: CancellationToken) -> Result<Option<GameExit>> {
+async fn run_game(app: &AppHandle, id: &str, join: Option<String>, cancel: CancellationToken) -> Result<Option<GameExit>> {
     let st = app.state::<AppState>();
     let ctx = st.ctx.clone();
     let settings = st.settings();
@@ -111,7 +116,7 @@ async fn run_game(app: &AppHandle, id: &str, cancel: CancellationToken) -> Resul
     // Account first: no point downloading 500 MB to then fail on login.
     let account = {
         let mut accs = st.accounts.lock().await;
-        let Some(acc) = accs.active().cloned() else { bail!("Zaloguj się kontem Microsoft, aby grać") };
+        let Some(acc) = accs.active().cloned() else { bail!("Zaloguj się kontem Microsoft, aby grać", "Sign in with a Microsoft account to play") };
         match accounts::ensure_fresh(&ctx, &acc).await? {
             Some(fresh) => {
                 accs.upsert(fresh.clone());
@@ -135,10 +140,10 @@ async fn run_game(app: &AppHandle, id: &str, cancel: CancellationToken) -> Resul
     if !inst.installed {
         if settings.install_performance_mods && !inst.loader.is_plain() {
             match modrinth::install_performance_mods(&ctx, &inst, &rep, &cancel).await {
-                Ok(names) if !names.is_empty() => log(app, id, format!("[Patina] Zainstalowano mody: {}", names.join(", ")), false),
+                Ok(names) if !names.is_empty() => log(app, id, tr!("[Patina] Zainstalowano mody: {}", "[Patina] Installed mods: {}", names.join(", ")), false),
                 Ok(_) => {}
                 Err(Error::Cancelled) => return Err(Error::Cancelled),
-                Err(e) => log(app, id, format!("[Patina] Nie udało się pobrać modów optymalizacyjnych: {e}"), true),
+                Err(e) => log(app, id, tr!("[Patina] Nie udało się pobrać modów optymalizacyjnych: {e}", "[Patina] Could not download performance mods: {e}"), true),
             }
         }
         // Reload: the player may have edited the instance while we downloaded.
@@ -152,13 +157,14 @@ async fn run_game(app: &AppHandle, id: &str, cancel: CancellationToken) -> Resul
         return Err(Error::Cancelled);
     }
 
-    rep.report("launch", 1, 1, "Uruchamianie gry…");
+    rep.report("launch", 1, 1, lang::tr("Uruchamianie gry…", "Starting the game…"));
     let game_dir = ctx.paths.game_dir(id);
     tokio::select! {
         biased;
         _ = cancel.cancelled() => return Err(Error::Cancelled),
         result = launch::run_hook(&settings.pre_launch_command, &game_dir) => result?,
     }
+    patina_mod::sync(&ctx, &inst)?;
     let player = Player {
         name: account.name.clone(),
         uuid: account.uuid.clone(),
@@ -166,6 +172,10 @@ async fn run_game(app: &AppHandle, id: &str, cancel: CancellationToken) -> Resul
         xuid: account.xuid.clone().unwrap_or_else(|| "0".into()),
         user_type: "msa".into(),
     };
+    // A server picked on the Servers page is joined this time only: the instance on disk keeps its own.
+    if let Some(server) = join.filter(|s| !s.trim().is_empty()) {
+        inst.overrides.join_server = Some(server);
+    }
     let spec = if rust { engine::build(&ctx, &inst, &player, &settings)? } else { launch::build(&ctx, &inst, &prep, &player, &settings) };
     if !rust {
         log(app, id, format!("[Patina] Java: {}", prep.java.display()), false);
@@ -240,7 +250,7 @@ async fn run_game(app: &AppHandle, id: &str, cancel: CancellationToken) -> Resul
         }
     }
     let code = status.code();
-    log(app, id, format!("[Patina] Gra zakończona (kod {})", code.map(|c| c.to_string()).unwrap_or_else(|| "—".into())), false);
+    log(app, id, tr!("[Patina] Gra zakończona (kod {})", "[Patina] Game exited (code {})", code.map(|c| c.to_string()).unwrap_or_else(|| "—".into())), false);
     let crashed = !killed && !status.success();
     // Publish the terminal event only after the caller releases the reservation.
     Ok(Some(GameExit { crashed, code, post_exit_command: settings.post_exit_command, game_dir }))

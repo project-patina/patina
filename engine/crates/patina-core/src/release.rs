@@ -8,11 +8,11 @@ pub const RELEASE: Option<&str> = match option_env!("PATINA_VERSION") {
     _ => None,
 };
 
-/// [`RELEASE`], or this crate's Cargo.toml version for a build from source: what `--version`, user
-/// agents and reports say.
+/// [`RELEASE`], or the launcher's workspace version for a build from source (`build.rs`): what
+/// `--version`, user agents, reports and the title screen say.
 pub const VERSION: &str = match RELEASE {
     Some(version) => version,
-    None => env!("CARGO_PKG_VERSION"),
+    None => env!("PATINA_CLIENT_VERSION"),
 };
 
 /// A nightly's date and commit (`2026-10-28 0c02067`): nightly-build.yml builds the opt-in Nightly
@@ -53,14 +53,14 @@ mod tests {
     }
 
     #[test]
-    fn the_version_is_the_release_or_the_crate() {
+    fn the_version_is_the_release_or_the_launchers() {
         assert_eq!(
             super::RELEASE,
             option_env!("PATINA_VERSION").filter(|v| !v.is_empty())
         );
         assert_eq!(
             super::VERSION,
-            super::RELEASE.unwrap_or(env!("CARGO_PKG_VERSION"))
+            super::RELEASE.unwrap_or(env!("PATINA_CLIENT_VERSION"))
         );
         assert!(!super::VERSION.starts_with('v'));
     }

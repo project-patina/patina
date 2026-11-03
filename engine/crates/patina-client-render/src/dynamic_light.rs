@@ -1,11 +1,5 @@
-//! Patina Extras' dynamic lights (docs/extras.md): a torch, lantern or other light source held by
-//! a player or mob, dropped as an item, or an entity on fire lights the blocks and entities
-//! around it. Not in vanilla; off by default.
-//!
-//! Client-only and at render time: the light engine, chunk meshes and saves never see it. Each
-//! frame the game picks the [`MAX`] sources nearest the camera; terrain.wgsl and entity.wgsl
-//! raise a vertex's block light to `level - distance` (one level per block, as block light falls
-//! off) when that is brighter. Off, the list is empty and the shaders skip the loop.
+//! Item light levels for shader packs (`Luminance`), and the renderer's list of moving lights.
+//! The game passes that list empty: terrain.wgsl and entity.wgsl then skip it.
 use crate::blocks::BlockFacts;
 use glam::DVec3;
 use patina_world::registry::BlockRegistry;

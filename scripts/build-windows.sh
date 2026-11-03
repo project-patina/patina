@@ -13,6 +13,12 @@ out="$repo/dist-windows"
 package="$out/Patina"
 stage="$package/engine"
 
+# The launcher embeds it when it exists; a release must not ship without it.
+if [ ! -f "$repo/resources/patina-mod/patina-client-26.3.jar" ]; then
+    echo "The integrated mod is missing: run scripts/build-java-mod.sh" >&2
+    exit 1
+fi
+
 rm -rf "$out"
 mkdir -p "$stage/mods/patina/src/test" "$stage/exporters" "$out/.tools"
 

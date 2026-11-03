@@ -1,8 +1,8 @@
-//! Embeds Patina's icon (`packaging/icons/patina.ico`) in the Windows executables, as icon
+//! Embeds Patina's icon (`src-tauri/icons/icon.ico`) in the Windows executables, as icon
 //! resource 1: Explorer and the task bar show it, and the window takes it as its icon.
 fn main() {
     let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default();
-    let ico = format!("{dir}/../../packaging/icons/patina.ico");
+    let ico = format!("{dir}/../../../src-tauri/icons/icon.ico");
     println!("cargo:rerun-if-changed={ico}");
     #[cfg(windows)]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {

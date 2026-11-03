@@ -1,8 +1,11 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { ArrowDownToLine, Copy, Search, Trash2 } from "@lucide/svelte";
+  import { ArrowDownToLine, Copy, Trash2 } from "@lucide/svelte";
+  import Option from "./Option.svelte";
+  import SearchInput from "./SearchInput.svelte";
   import { api } from "../lib/api";
-  import { app, toast } from "../lib/state.svelte";
+  import { t } from "../lib/i18n.svelte";
+  import { app, toast, toastError } from "../lib/state.svelte";
 
   let { id }: { id: string } = $props();
 
@@ -16,7 +19,7 @@
     if (!app.logs[iid]?.length) {
       api.gameLog(iid).then((l) => {
         if (l.length && !app.logs[iid]?.length) app.logs[iid] = l;
-      });
+      }).catch(toastError);
     }
   });
 
@@ -34,27 +37,24 @@
   }
 
   function copy() {
-    navigator.clipboard?.writeText(lines.map((l) => l.line).join("\n")).then(() => toast("Skopiowano log", "success"));
+    navigator.clipboard?.writeText(lines.map((l) => l.line).join("\n")).then(() => toast(t("console.copied"), "success")).catch(toastError);
   }
 </script>
 
 <div class="console">
   <div class="bar">
-    <div class="search">
-      <Search size={14} />
-      <input class="input" placeholder="Filtruj…" bind:value={query} />
-    </div>
-    <label class="chk"><input type="checkbox" bind:checked={errorsOnly} /> Tylko błędy</label>
-    <span class="dim count">{lines.length} linii</span>
-    <button class="btn sm icon" title="Kopiuj" onclick={copy}><Copy size={14} /></button>
-    <button class="btn sm icon" title="Wyczyść" onclick={() => (app.logs[id] = [])}><Trash2 size={14} /></button>
-    <button class="btn sm icon" class:on={follow} title="Przewijaj na bieżąco" onclick={() => { follow = true; box && (box.scrollTop = box.scrollHeight); }}><ArrowDownToLine size={14} /></button>
+    <SearchInput bind:value={query} placeholder={t("console.filter")} width="220px" />
+    <Option bind:checked={errorsOnly} label={t("console.errorsOnly")} />
+    <span class="count">{t("console.lines", { n: lines.length })}</span>
+    <button class="btn sm icon" title={t("common.copy")} aria-label={t("common.copy")} onclick={copy}><Copy size={14} /></button>
+    <button class="btn sm icon" title={t("console.clear")} aria-label={t("console.clear")} onclick={() => (app.logs[id] = [])}><Trash2 size={14} /></button>
+    <button class="btn sm icon" class:on={follow} title={t("console.follow")} aria-label={t("console.follow")} aria-pressed={follow} onclick={() => { follow = true; box && (box.scrollTop = box.scrollHeight); }}><ArrowDownToLine size={14} /></button>
   </div>
   <div class="log selectable mono" bind:this={box} onscroll={onScroll}>
     {#each shown as l, i (i)}
       <div class="ln" class:err={l.error} class:sys={l.line.startsWith("[Patina]")}>{l.line}</div>
     {:else}
-      <div class="empty dim">Brak logów. Uruchom grę, aby zobaczyć jej wyjście.</div>
+      <div class="empty">{t("console.empty")}</div>
     {/each}
   </div>
 </div>
@@ -64,7 +64,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    min-height: 0;
+    min-height: 240px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     overflow: hidden;
@@ -73,49 +73,24 @@
   .bar {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 8px 12px;
+    flex-wrap: wrap;
     padding: 8px;
     border-bottom: 1px solid var(--border);
   }
-  .search {
-    position: relative;
-    display: flex;
-    align-items: center;
-    flex: 1;
-    max-width: 320px;
-  }
-  .search :global(svg) {
-    position: absolute;
-    left: 10px;
-    color: var(--text-3);
-  }
-  .search .input {
-    height: 30px;
-    padding-left: 30px;
-  }
-  .chk {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.85rem;
-    color: var(--text-2);
-  }
-  .chk input {
-    accent-color: var(--accent);
-  }
   .count {
     margin-left: auto;
-    font-size: 0.8rem;
+    color: var(--text-3);
+    font-size: var(--fs-12);
   }
-  .btn.on {
-    color: var(--accent);
-  }
+  .btn.on { color: var(--accent-strong); }
   .log {
     flex: 1;
+    min-height: 0;
     overflow: auto;
-    padding: 10px 12px;
-    font-size: 0.78rem;
-    line-height: 1.55;
+    padding: 8px 12px;
+    font-size: var(--fs-12);
+    line-height: 1.5;
     user-select: text;
     background: var(--bg-2);
   }
@@ -124,15 +99,13 @@
     word-break: break-all;
     color: var(--text-2);
   }
-  .ln.err {
-    color: #f87171;
-  }
-  .ln.sys {
-    color: var(--accent);
-  }
+  .ln.err { color: var(--danger); }
+  .ln.sys { color: var(--accent-strong); }
   .empty {
-    padding: 30px;
-    text-align: center;
+    padding: 32px;
+    color: var(--text-3);
     font-family: var(--font);
+    font-size: var(--fs-13);
+    text-align: center;
   }
 </style>

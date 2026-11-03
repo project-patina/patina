@@ -6,6 +6,9 @@ use crate::{Ctx, Result};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
+    /// `pl`, `en`, or empty to follow the system.
+    pub language: String,
+
     // Appearance
     /// `dark`, `light` or `system`.
     pub theme: String,
@@ -14,7 +17,6 @@ pub struct Settings {
     /// Accent colour as `#rrggbb`.
     pub accent: String,
     pub animations: bool,
-    pub blur: bool,
     /// UI zoom, 0.8–1.25.
     pub ui_scale: f32,
     /// `inter`, `outfit`, `system` or `mono`.
@@ -25,14 +27,7 @@ pub struct Settings {
 
     // Home hero + wallpapers. Image refs: "" (instance banner), `preset:<key>`, `custom:<id>`.
     pub hero_wallpaper: String,
-    /// Show the living village behind the player instead of the wallpaper.
-    pub hero_scene: bool,
-    /// Darkening over the hero image, 0–80 %.
-    pub hero_dim: u32,
     pub app_wallpaper: String,
-    pub app_wallpaper_dim: u32,
-    /// `center`, `left`, `right`.
-    pub model_position: String,
     pub follow_cursor: bool,
     pub show_nametag: bool,
 
@@ -76,10 +71,8 @@ pub struct Settings {
 
     /// Applied when a Rust instance starts.
     pub rust_engine: crate::engine::EngineSettings,
-    /// JSON of the home screen stance; empty for the default.
-    pub model_pose: String,
 
-    /// 1 once the new brand's accent and backdrop have been applied.
+    /// 1 once the new brand's accent has been applied.
     #[serde(default)]
     pub brand_version: u32,
     pub onboarded: bool,
@@ -89,21 +82,17 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            language: String::new(),
             theme: "dark".into(),
             palette: "patina".into(),
             accent: "#3fb8a0".into(),
             animations: true,
-            blur: true,
             ui_scale: 1.0,
             font: "inter".into(),
             radius: "normal".into(),
             compact: false,
             hero_wallpaper: String::new(),
-            hero_scene: true,
-            hero_dim: 25,
             app_wallpaper: String::new(),
-            app_wallpaper_dim: 75,
-            model_position: "center".into(),
             follow_cursor: true,
             show_nametag: true,
             show_snapshots: false,
@@ -130,7 +119,6 @@ impl Default for Settings {
             pre_launch_command: String::new(),
             post_exit_command: String::new(),
             rust_engine: Default::default(),
-            model_pose: String::new(),
             brand_version: 1,
             onboarded: false,
             last_instance: None,
@@ -155,7 +143,6 @@ impl Settings {
         let mut settings: Self = std::fs::read(ctx.paths.settings_file()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
         if settings.brand_version < 1 {
             settings.accent = Self::default().accent;
-            settings.hero_scene = true;
             settings.brand_version = 1;
         }
         settings.sanitized()
@@ -178,8 +165,13 @@ impl Settings {
             self.on_launch = "hide".into();
         }
         self.rust_engine = self.rust_engine.sanitized();
-        self.hero_dim = self.hero_dim.min(90);
-        self.app_wallpaper_dim = self.app_wallpaper_dim.min(95);
+        // Quilt and Vanilla are no longer offered; instances that use them keep working.
+        if !matches!(self.default_loader, crate::loaders::Loader::Fabric | crate::loaders::Loader::Rust) {
+            self.default_loader = crate::loaders::Loader::Fabric;
+        }
+        if !["", "pl", "en"].contains(&self.language.as_str()) {
+            self.language = String::new();
+        }
         if !["dark", "light", "system"].contains(&self.theme.as_str()) {
             self.theme = "dark".into();
         }
@@ -194,9 +186,6 @@ impl Settings {
         }
         if !["sharp", "normal", "round"].contains(&self.radius.as_str()) {
             self.radius = "normal".into();
-        }
-        if !["left", "center", "right"].contains(&self.model_position.as_str()) {
-            self.model_position = "center".into();
         }
         self
     }
@@ -215,12 +204,43 @@ mod tests {
     }
 
     #[test]
+    fn removed_home_controls_are_ignored_without_resetting_other_settings() {
+        let s: Settings = serde_json::from_str(r##"{"heroScene":true,"heroDim":80,"appWallpaperDim":20,"modelPosition":"left","heroWallpaper":"preset:aurora","modelPose":"custom pose","blur":false,"onboarded":true,"theme":"light"}"##).unwrap();
+        let s = s.sanitized();
+        assert!(s.onboarded);
+        assert_eq!(s.theme, "light");
+        assert_eq!(s.hero_wallpaper, "preset:aurora");
+        let saved = serde_json::to_value(s).unwrap();
+        for removed in ["heroScene", "heroDim", "appWallpaperDim", "modelPosition", "modelPose", "blur"] { assert!(saved.get(removed).is_none()); }
+    }
+
+    #[test]
+    fn language_is_kept_only_when_known() {
+        assert_eq!(serde_json::from_str::<Settings>(r#"{"theme":"dark"}"#).unwrap().language, "");
+        let s: Settings = serde_json::from_str(r#"{"language":"pl"}"#).unwrap();
+        assert_eq!(s.sanitized().language, "pl");
+        let s: Settings = serde_json::from_str(r#"{"language":"de"}"#).unwrap();
+        assert_eq!(s.sanitized().language, "");
+    }
+
+    #[test]
+    fn retired_default_loaders_become_fabric() {
+        use crate::loaders::Loader;
+        for retired in ["quilt", "vanilla"] {
+            let s: Settings = serde_json::from_str(&format!(r#"{{"defaultLoader":"{retired}"}}"#)).unwrap();
+            assert_eq!(s.sanitized().default_loader, Loader::Fabric);
+        }
+        let s: Settings = serde_json::from_str(r#"{"defaultLoader":"rust"}"#).unwrap();
+        assert_eq!(s.sanitized().default_loader, Loader::Rust);
+    }
+
+    #[test]
     fn repairs_invalid_values_and_memory_relationship() {
         let s = Settings {
             ui_scale: f32::NAN, memory_min_mb: 8192, memory_max_mb: 1024,
             accent: "red; color: transparent".into(), palette: "unknown".into(),
-            font: "bad".into(), radius: "bad".into(), model_position: "bad".into(),
-            hero_dim: 500, ..Settings::default()
+            font: "bad".into(), radius: "bad".into(),
+            ..Settings::default()
         }.sanitized();
         assert_eq!(s.ui_scale, 1.0);
         assert_eq!(s.memory_min_mb, 1024);
@@ -228,7 +248,5 @@ mod tests {
         assert_eq!(s.palette, "patina");
         assert_eq!(s.font, "inter");
         assert_eq!(s.radius, "normal");
-        assert_eq!(s.model_position, "center");
-        assert_eq!(s.hero_dim, 90);
     }
 }

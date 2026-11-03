@@ -120,13 +120,13 @@ pub async fn recommended(ctx: &Ctx, loader: Loader, mc: &str) -> Result<String> 
     let v = versions(ctx, loader, mc).await?;
     match v.iter().find(|v| v.stable).or(v.first()) {
         Some(v) => Ok(v.version.clone()),
-        None => bail!("{} nie obsługuje jeszcze wersji {mc}", loader.label()),
+        None => bail!("{} nie obsługuje jeszcze wersji {mc}", "{} does not support version {mc} yet", loader.label()),
     }
 }
 
 /// Fetch (or read the cached) loader profile for `mc` + `loader_version`.
 pub async fn profile(ctx: &Ctx, loader: Loader, mc: &str, loader_version: &str) -> Result<VersionJson> {
-    let Some(meta) = loader.meta() else { bail!("Vanilla nie ma profilu loadera") };
+    let Some(meta) = loader.meta() else { bail!("Vanilla nie ma profilu loadera", "Vanilla has no loader profile") };
     let id = format!("{}-loader-{loader_version}-{mc}", loader.label().to_lowercase());
     let path = ctx.paths.version_json(&id);
     if let Ok(bytes) = std::fs::read(&path) {

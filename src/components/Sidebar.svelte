@@ -1,116 +1,59 @@
 <script lang="ts">
-  import { Compass, House, LayoutGrid, Newspaper, Settings, Shirt } from "@lucide/svelte";
+  import { Compass, House, LayoutGrid, Server, Settings, Shirt } from "@lucide/svelte";
+  import { t } from "../lib/i18n.svelte";
+  import { indicator } from "../lib/motion";
   import { app, navigate, type Page } from "../lib/state.svelte";
 
-  const items: { page: Page; label: string; icon: typeof House }[] = [
-    { page: "home", label: "Start", icon: House },
-    { page: "news", label: "NEWS — aktualności", icon: Newspaper },
-    { page: "instances", label: "Instancje", icon: LayoutGrid },
-    { page: "discover", label: "Mody, shadery, paczki", icon: Compass },
-    { page: "wardrobe", label: "Garderoba: skin i peleryny", icon: Shirt },
-  ];
+  const items = $derived<{ page: Page; label: string; icon: typeof House }[]>([
+    { page: "home", label: t("nav.home"), icon: House },
+    { page: "instances", label: t("nav.instances"), icon: LayoutGrid },
+    { page: "discover", label: t("nav.discover"), icon: Compass },
+    { page: "servers", label: t("nav.servers"), icon: Server },
+    { page: "wardrobe", label: t("nav.wardrobe"), icon: Shirt },
+  ]);
 
-  const active = $derived(app.page === "instance" ? "instances" : app.page === "pose" ? "wardrobe" : app.page);
-  const runningCount = $derived(Object.values(app.running).filter((s) => s === "running").length);
+  const active = $derived(app.page === "instance" ? "instances" : app.page);
+  const running = $derived(Object.values(app.running).some((s) => s === "running"));
 </script>
 
-<nav class="rail" aria-label="Menu główne">
-  <div class="group">
-    {#each items as it (it.page)}
-      <button class="nav" class:active={active === it.page} onclick={() => navigate(it.page)} aria-label={it.label} aria-current={active === it.page ? "page" : undefined}>
-        <it.icon size={19} />
-        <span class="tip">{it.label}</span>
-        {#if it.page === "instances" && runningCount}<span class="dot"></span>{/if}
-      </button>
-    {/each}
-  </div>
-
-  <div class="group">
-    <button class="nav" class:active={active === "settings"} onclick={() => navigate("settings")} aria-label="Ustawienia" aria-current={active === "settings" ? "page" : undefined}>
-      <Settings size={19} />
-      <span class="tip">Ustawienia</span>
+<nav class="side" aria-label={t("nav.main")} use:indicator={active}>
+  <span class="nav-indicator" data-indicator></span>
+  {#each items as it (it.page)}
+    <button class="nav-item" onclick={() => navigate(it.page)} title={it.label} aria-current={active === it.page ? "page" : undefined}>
+      <it.icon size={16} />
+      <span class="text">{it.label}</span>
+      {#if it.page === "instances" && running}<span class="dot"></span>{/if}
     </button>
-  </div>
+  {/each}
+  <button class="nav-item last" onclick={() => navigate("settings")} title={t("nav.settings")} aria-current={active === "settings" ? "page" : undefined}>
+    <Settings size={16} />
+    <span class="text">{t("nav.settings")}</span>
+  </button>
 </nav>
 
 <style>
-  .rail {
-    width: 64px;
+  .side {
+    position: relative;
+    width: 200px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0 14px;
+    gap: 4px;
+    padding: 12px;
+    border-right: 1px solid var(--border);
   }
-  .group {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .nav {
-    position: relative;
-    width: 42px;
-    height: 42px;
-    display: grid;
-    place-items: center;
-    border-radius: 12px;
-    color: var(--text-3);
-    border: 1px solid transparent;
-    transition: color 0.2s, background 0.25s var(--ease), border-color 0.25s, transform 0.2s var(--ease);
-  }
-  .nav:hover {
-    color: var(--text);
-    background: var(--panel);
-  }
-  .nav:active {
-    transform: scale(0.94);
-  }
-  .nav.active {
-    color: var(--text);
-    background: var(--panel-2);
-    border-color: var(--border-2);
-  }
-  .nav.active::before {
-    content: "";
-    position: absolute;
-    left: -11px;
-    top: 11px;
-    bottom: 11px;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: var(--accent);
-  }
+  .last { margin-top: auto; }
   .dot {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 7px;
-    height: 7px;
+    margin-left: auto;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: var(--success);
-    box-shadow: 0 0 0 3px var(--bg);
   }
-  .tip {
-    position: absolute;
-    left: 52px;
-    padding: 5px 9px;
-    border-radius: 7px;
-    background: var(--panel-3);
-    border: 1px solid var(--border-2);
-    color: var(--text);
-    font-size: 0.8rem;
-    font-weight: 600;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transform: translateX(-4px);
-    transition: opacity 0.15s, transform 0.2s var(--ease);
-    z-index: 40;
-  }
-  .nav:hover .tip,
-  .nav:focus-visible .tip {
-    opacity: 1;
-    transform: none;
+  @media (max-width: 979px) {
+    .side { width: 56px; padding: 12px 8px; }
+    .side > .nav-item { justify-content: center; padding: 0; }
+    .text { display: none; }
+    .dot { position: absolute; top: 6px; right: 6px; margin: 0; }
   }
 </style>

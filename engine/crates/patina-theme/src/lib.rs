@@ -93,8 +93,12 @@ pub mod icons {
 }
 
 /// Patina's icon at 64 px (PNG), for window title bars and task bars at run time. Rendered from
-/// `docs/media/brand/icon.svg` by `cargo run -p xtask -- icons`.
+/// the launcher's `public/icon.svg` with `rsvg-convert`.
 pub const ICON_PNG: &[u8] = include_bytes!("../icons/patina-64.png");
+
+/// The boot animation's sheet (PNG): 64 frames of 160x160 on transparent, 8 to a row, drawn by
+/// the launcher's `scripts/render-splash.mjs`.
+pub const SPLASH_PNG: &[u8] = include_bytes!("../splash/patina-splash.png");
 
 /// How a type step sizes on the web.
 #[derive(Clone, Copy, Debug, PartialEq)]

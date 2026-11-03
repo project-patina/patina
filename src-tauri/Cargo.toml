@@ -11,6 +11,10 @@ default-run = "amethyst-launcher"
 name = "amethyst_launcher_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# Enabled by `tauri build`; `tauri dev` continues using the Vite server.
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

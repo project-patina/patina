@@ -1,4 +1,4 @@
-//! `.hpack`, a Patina modpack (docs/api/mod-index.md): registry mods
+//! `.ppack`, a Patina modpack (docs/api/mod-index.md): registry mods
 //! played together as a profile. A zip holding `patina-modpack.toml`, which
 //! names each mod by id, version and SHA-256 (the files themselves come from
 //! the registry), and optionally `overrides/`: settings and resource packs
@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// The manifest's file name in a `.hpack`.
+/// The manifest's file name in a `.ppack`.
 pub const MANIFEST: &str = "patina-modpack.toml";
 /// The manifest formats this build reads.
 pub const FORMAT: u32 = 1;
@@ -54,17 +54,6 @@ fn on() -> bool {
     true
 }
 
-#[cfg(feature = "index")]
-impl PackMod {
-    pub fn requirement(&self) -> crate::index::Requirement {
-        crate::index::Requirement {
-            id: self.id.clone(),
-            version: self.version.clone(),
-            sha256: self.sha256.clone(),
-        }
-    }
-}
-
 impl Manifest {
     pub fn parse(text: &str) -> Result<Manifest, String> {
         let m: Manifest = toml::from_str(text).map_err(|e| format!("{MANIFEST}: {e}"))?;
@@ -106,7 +95,7 @@ impl Manifest {
     }
 }
 
-/// A `.hpack` as read from disk: its manifest and its override files, by
+/// A `.ppack` as read from disk: its manifest and its override files, by
 /// path under `overrides/`.
 #[derive(Debug)]
 pub struct Modpack {
@@ -227,7 +216,7 @@ sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
 "#;
 
     fn write_pack(dir: &Path, manifest: &str, files: &[(&str, &[u8])]) -> PathBuf {
-        let path = dir.join("cozy.hpack");
+        let path = dir.join("cozy.ppack");
         let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
         let options = zip::write::SimpleFileOptions::default();
         zip.start_file(MANIFEST, options).unwrap();
@@ -241,7 +230,7 @@ sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
     }
 
     fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("patina-hpack-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("patina-ppack-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -279,7 +268,7 @@ sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
         for name in [
             "mods/evil.jar",
             "overrides/../../.bashrc",
-            "overrides/patina-mods/evil.hmod",
+            "overrides/patina-mods/evil.pmod",
             "overrides/resourcepacks/../options.txt",
             "overrides/servers.dat",
             "overrides/patina-mods/.patina-mod-data/other_mod/x",

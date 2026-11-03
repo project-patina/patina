@@ -91,10 +91,10 @@ pub async fn ensure_runtime(ctx: &Ctx, component: &str, reporter: &Reporter, con
     if marker.exists() && bin.exists() {
         return Ok(bin);
     }
-    reporter.report("java", 0, 1, format!("Pobieranie Javy ({component})…"));
+    reporter.report("java", 0, 1, crate::tr!("Pobieranie Javy ({component})…", "Downloading Java ({component})…"));
     let all: HashMap<String, HashMap<String, Vec<RuntimeEntry>>> = http::get_json(&ctx.http, RUNTIMES_URL).await?;
     let Some(entry) = all.get(platform_key()).and_then(|p| p.get(component)).and_then(|v| v.first()) else {
-        bail!("Mojang nie udostępnia Javy {component} dla tej platformy — ustaw własną ścieżkę Javy w ustawieniach")
+        bail!("Mojang nie udostępnia Javy {component} dla tej platformy — ustaw własną ścieżkę Javy w ustawieniach", "Mojang does not provide Java {component} for this platform. Set your own Java path in settings")
     };
     log::info!("installing java runtime {component} {}", entry.version.name);
     let manifest: RuntimeManifest = http::get_json(&ctx.http, &entry.manifest.url).await?;
@@ -129,7 +129,7 @@ pub async fn ensure_runtime(ctx: &Ctx, component: &str, reporter: &Reporter, con
         std::os::unix::fs::symlink(target, &path)?;
     }
     if !bin.exists() {
-        bail!("Pobrana Java nie zawiera pliku {}", bin.display());
+        bail!("Pobrana Java nie zawiera pliku {}", "The downloaded Java has no file {}", bin.display());
     }
     std::fs::write(&marker, &entry.version.name)?;
     Ok(bin)

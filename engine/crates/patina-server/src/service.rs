@@ -76,7 +76,6 @@ pub fn systemd_unit(program: &Path, dir: &Path, user: Option<&str>) -> String {
     format!(
         "[Unit]
 Description=Patina server in {dir}
-Documentation=https://patina.invalid
 Wants=network-online.target
 After=network-online.target
 

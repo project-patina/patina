@@ -1,4 +1,4 @@
-//! The uniforms a shader pack's gbuffers programs read per draw (`HzDraw` at set 2, the
+//! The uniforms a shader pack's gbuffers programs read per draw (`PtDraw` at set 2, the
 //! translator's `DRAW_UNIFORMS`): one slot per render stage of a uniform buffer, picked with a
 //! dynamic offset at each draw.
 
@@ -58,7 +58,7 @@ impl EntitySpan {
     }
 }
 
-/// `HzDraw`'s size: `renderStage`, `entityId`, `blockEntityId`, a pad, `entityColor`.
+/// `PtDraw`'s size: `renderStage`, `entityId`, `blockEntityId`, a pad, `entityColor`.
 const SIZE: u32 = 32;
 
 pub(super) struct DrawUniforms {

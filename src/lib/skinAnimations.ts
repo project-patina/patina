@@ -1,6 +1,6 @@
 import type { Object3D } from "three";
 import { loadGear, type Gear } from "./playerGear";
-import type { PartPose, Pose } from "./pose";
+import { DEFAULT_POSE, type PartPose } from "./pose";
 import { FunctionAnimation, type PlayerAnimation, type PlayerObject } from "skinview3d";
 
 /** Pointer position relative to the model's canvas, roughly -1…1 on each axis. */
@@ -52,11 +52,11 @@ function place(part: Object3D, p: PartPose) {
 }
 
 /**
- * The stance from `pose`, with the sword in the right hand and the shield in
- * the left. Unless `still()`, it comes alive: the player breathes, shifts
- * weight and twitches the sword now and then. `strike()` swings the sword.
+ * The home stance, with the sword in the right hand and the shield in the left.
+ * The player breathes, shifts weight and twitches the sword now and then.
+ * `strike()` swings the sword.
  */
-export function combatAnimation(look: LookTarget, bodyYaw: () => number, pose: () => Pose, still: () => boolean) {
+export function combatAnimation(look: LookTarget, bodyYaw: () => number) {
   let gear: Gear | null = null;
   let disposed = false;
   let attached = false;
@@ -80,7 +80,7 @@ export function combatAnimation(look: LookTarget, bodyYaw: () => number, pose: (
       attached = true;
     }
 
-    const stance = pose();
+    const stance = DEFAULT_POSE;
     p.position.y = stance.sink;
     p.rotation.y = stance.yaw * DEG;
     place(s.body, stance.body);
@@ -98,10 +98,6 @@ export function combatAnimation(look: LookTarget, bodyYaw: () => number, pose: (
         gear.sword.position.x += 0.5;
         gear.shield.position.x -= 0.5;
       }
-    }
-    if (still()) {
-      s.body.scale.set(1, 1, 1);
-      return;
     }
 
     const breath = (1 - Math.cos(t * 1.7)) / 2;
@@ -156,7 +152,6 @@ export function combatAnimation(look: LookTarget, bodyYaw: () => number, pose: (
     strike() {
       if (swing < 0) swing = Math.max(last, 0);
     },
-    gear: () => gear,
     dispose() {
       disposed = true;
       gear?.dispose();
@@ -197,14 +192,8 @@ export function aliveAnimation(look: LookTarget, bodyYaw: () => number) {
   });
 }
 
-export type AnyAnimation = PlayerAnimation & { strike?: () => void; dispose?: () => void; gear?: () => Gear | null };
+export type AnyAnimation = PlayerAnimation & { strike?: () => void; dispose?: () => void };
 
-/** What the armed stance needs; without it the player stands at ease. */
-export interface Armed {
-  pose: () => Pose;
-  still: () => boolean;
-}
-
-export function makeAnimation(look: LookTarget, bodyYaw: () => number, armed: Armed | null): AnyAnimation {
-  return armed ? combatAnimation(look, bodyYaw, armed.pose, armed.still) : aliveAnimation(look, bodyYaw);
+export function makeAnimation(look: LookTarget, bodyYaw: () => number, armed: boolean): AnyAnimation {
+  return armed ? combatAnimation(look, bodyYaw) : aliveAnimation(look, bodyYaw);
 }

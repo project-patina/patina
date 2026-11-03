@@ -425,10 +425,7 @@ impl Game<'_> {
         let lang = Arc::new(patina_client::net::load_language(&root));
         let view = client_view_distance(self.settings.render_distance);
         if local.is_none() {
-            patina_client::crash::set_detail(
-                "Server",
-                patina_client::net::shown_address(address),
-            );
+            patina_client::crash::set_detail("Server", address.to_owned());
         }
         // A signed-in account always plays under its own name.
         let auth = patina_client::auth::current();
@@ -446,7 +443,6 @@ impl Game<'_> {
         let session = match local {
             Some(pipe) => Session::connect_local(pipe, name, view, lang.clone(), root.clone()),
             None => {
-                self.extras_connecting(address, name);
                 match cookies {
                     Some(cookies) => Session::connect_transferred(
                         address,
@@ -636,10 +632,6 @@ impl Game<'_> {
             return self.begin_closing_save(false);
         }
         self.finish_perf();
-        if reason.is_none() {
-            // Leaving on purpose: nothing for auto-reconnect to retry.
-            self.extras_left();
-        }
         self.clear_waypoints();
         self.hud_disconnected();
         // Vanilla's Hud also ticks on the title and connect screens, so the
@@ -711,7 +703,6 @@ impl Game<'_> {
         title.mode = patina_client::title::Mode::Multiplayer(match reason {
             Some(reason) => patina_client::multiplayer::Screen::Disconnected {
                 reason,
-                retry: None,
             },
             None => patina_client::multiplayer::Screen::list(&saves),
         });
@@ -1189,7 +1180,6 @@ impl Game<'_> {
                     uuid,
                 } => {
                     self.set_registries(registries);
-                    self.extras_joined();
                     // handleLogin: the level loading screen replaces any dialog.
                     self.close_dialogs();
                     if let Some(r) = self.remote.as_mut() {
@@ -1257,10 +1247,7 @@ impl Game<'_> {
                         }
                     }
                 }
-                Event::Disconnected {
-                    reason,
-                    from_server,
-                } => {
+                Event::Disconnected { reason } => {
                     log::info!("Patina: disconnected: {reason}");
                     // ClientboundTransferPacket left a target: connect there
                     // instead of showing the disconnect, the stored cookies
@@ -1276,9 +1263,7 @@ impl Game<'_> {
                         self.connect_server_with_cookies(&address, &name, Some(cookies))?;
                         return Ok(());
                     }
-                    let retry = self.reconnect_after(&reason, from_server);
                     self.leave_server(Some(reason))?;
-                    self.offer_reconnect(retry);
                     return Ok(());
                 }
                 Event::Packet(packet) => self.handle_packet(*packet)?,
@@ -7361,7 +7346,7 @@ impl Game<'_> {
     pub(super) fn remote_status(&self) -> Option<serde_json::Value> {
         let r = self.remote.as_ref()?;
         Some(serde_json::json!({
-            "address": patina_client::net::shown_address(&r.session.address),
+            "address": r.session.address,
             "name": r.session.name,
             "joined": r.joined,
             // ServerboundPlayerLoadedPacket sent: the level around the
@@ -7844,10 +7829,6 @@ impl Remote {
             .get(&id)
             .or_else(|| self.players.get(uuid))
             .map(String::as_str)
-    }
-    /// Players in the server's player list, this one included.
-    pub(super) fn player_count(&self) -> usize {
-        self.players.len()
     }
     /// The local player's profile UUID.
     pub(super) fn profile(&self) -> u128 {

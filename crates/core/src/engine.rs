@@ -137,7 +137,7 @@ pub async fn ensure_owner(ctx: &Ctx, token: &str) -> Result<()> {
     if owns_game(&body) {
         return Ok(());
     }
-    bail!("To konto nie posiada Minecraft: Java Edition.")
+    bail!("To konto nie posiada Minecraft: Java Edition.", "This account does not own Minecraft: Java Edition.")
 }
 
 fn owns_game(entitlements: &serde_json::Value) -> bool {
@@ -148,28 +148,40 @@ fn owns_game(entitlements: &serde_json::Value) -> bool {
 pub async fn prepare(ctx: &Ctx, prep: &Prepared, settings: &Settings, reporter: &Reporter, cancel: &CancellationToken) -> Result<()> {
     let root = root(ctx);
     if !client(&root).is_file() {
-        bail!("Silnik Rust nie jest zainstalowany ({}). Uruchom scripts/install-engine.sh.", root.display());
+        bail!("Silnik Rust nie jest zainstalowany ({}). Uruchom scripts/install-engine.sh.", "The Rust engine is not installed ({}). Run scripts/install-engine.sh.", root.display());
     }
-    if resources(&root).join(READY_MARKER).exists() {
+    // The marker names the lock it was prepared for: a newer engine prepares again.
+    let stamp = lock_stamp(&root);
+    if is_ready(&root, &stamp) {
         return Ok(());
     }
     let Some(server) = prep.version.downloads.as_ref().and_then(|d| d.server.clone()) else {
-        bail!("Wersja {} nie ma pliku serwera", prep.vanilla_id);
+        bail!("Wersja {} nie ma pliku serwera", "Version {} has no server file", prep.vanilla_id);
     };
     let server_jar = ctx.paths.version_dir(&prep.vanilla_id).join("server.jar");
     let item = DlItem::new(&server.url, &server_jar).sha1(server.sha1.clone()).size(server.size);
-    download_all(&ctx.http, vec![item], settings.max_concurrent_downloads as usize, reporter, "engine", "Pobieranie plików serwera", cancel).await?;
+    download_all(&ctx.http, vec![item], settings.max_concurrent_downloads as usize, reporter, "engine", crate::lang::tr("Pobieranie plików serwera", "Downloading server files"), cancel).await?;
 
-    let java_home = prep.java.parent().and_then(Path::parent).ok_or_else(|| Error::msg("Nieznany folder Javy"))?;
+    let java_home = prep.java.parent().and_then(Path::parent).ok_or_else(|| Error::msg(crate::lang::tr("Nieznany folder Javy", "Unknown Java folder")))?;
     let minecraft = ctx.paths.root.to_string_lossy().into_owned();
     let root_arg = root.to_string_lossy().into_owned();
     let server_arg = server_jar.to_string_lossy().into_owned();
-    reporter.report("engine", 0, 2, "Przygotowywanie zasobów silnika…");
+    reporter.report("engine", 0, 2, crate::lang::tr("Przygotowywanie zasobów silnika…", "Preparing engine resources…"));
     run_prepare(&root, java_home, &["--prepare", "--server-jar", &server_arg, "--minecraft-dir", &minecraft, "--root", &root_arg], 0, reporter, cancel).await?;
-    reporter.report("engine", 1, 2, "Kopiowanie dźwięków…");
+    reporter.report("engine", 1, 2, crate::lang::tr("Kopiowanie dźwięków…", "Copying sounds…"));
     run_prepare(&root, java_home, &["sounds", "--minecraft-dir", &minecraft, "--root", &root_arg], 1, reporter, cancel).await?;
-    write_atomic(&resources(&root).join(READY_MARKER), b"")?;
+    write_atomic(&resources(&root).join(READY_MARKER), stamp.as_bytes())?;
     Ok(())
+}
+
+/// SHA-256 of `research-lock.json`, which pins everything the resources are made from.
+fn lock_stamp(root: &Path) -> String {
+    use sha2::{Digest, Sha256};
+    std::fs::read(root.join("research-lock.json")).map_or_else(|_| String::new(), |lock| hex::encode(Sha256::digest(lock)))
+}
+
+fn is_ready(root: &Path, stamp: &str) -> bool {
+    std::fs::read_to_string(resources(root).join(READY_MARKER)).is_ok_and(|ready| ready == stamp)
 }
 
 async fn run_prepare(root: &Path, java_home: &Path, args: &[&str], step: u64, reporter: &Reporter, cancel: &CancellationToken) -> Result<()> {
@@ -198,7 +210,7 @@ async fn run_prepare(root: &Path, java_home: &Path, args: &[&str], step: u64, re
         }
     }
     if !child.wait().await?.success() {
-        bail!("Przygotowanie silnika nie powiodło się: {last}");
+        bail!("Przygotowanie silnika nie powiodło się: {last}", "Engine preparation failed: {last}");
     }
     Ok(())
 }
@@ -289,6 +301,23 @@ fn merge_lines(current: &str, changes: &[(&str, String)]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_changed_lock_prepares_the_resources_again() {
+        let root = std::env::temp_dir().join(format!("patina-ready-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(resources(&root)).unwrap();
+        std::fs::write(root.join("research-lock.json"), "one").unwrap();
+        let stamp = lock_stamp(&root);
+        assert!(!is_ready(&root, &stamp));
+        // The marker written by earlier versions was empty.
+        std::fs::write(resources(&root).join(READY_MARKER), "").unwrap();
+        assert!(!is_ready(&root, &stamp));
+        std::fs::write(resources(&root).join(READY_MARKER), &stamp).unwrap();
+        assert!(is_ready(&root, &stamp));
+        std::fs::write(root.join("research-lock.json"), "two").unwrap();
+        assert!(!is_ready(&root, &lock_stamp(&root)));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn defaults_leave_the_games_choices_alone() {

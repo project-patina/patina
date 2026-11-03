@@ -2,7 +2,7 @@
 //! `gbuffers_entities`, `gbuffers_block`, `gbuffers_entities_translucent` and
 //! `gbuffers_particles` (spec 2.3, 5.3, 5.4): the runs of `Frame::entities` the game marked (`EntitySpan`), each its
 //! own draw with its `entityId` or `blockEntityId` and `entityColor` in a per-draw slot of
-//! `HzDraw` (set 2). Patina draws whatever the pack does not.
+//! `PtDraw` (set 2). Patina draws whatever the pack does not.
 
 use std::ops::Range;
 
@@ -11,7 +11,7 @@ use patina_shaders::render_stage;
 use super::Vertex;
 use super::pack_draw::EntitySpan;
 
-/// `HzDraw`'s size (pack_draw.rs).
+/// `PtDraw`'s size (pack_draw.rs).
 const SLOT: u64 = 32;
 
 const ATTRIBUTES: [wgpu::VertexAttribute; 6] = wgpu::vertex_attr_array![
@@ -32,45 +32,45 @@ pub fn buffers() -> [Option<wgpu::VertexBufferLayout<'static>>; 1] {
 /// normal. The quad's corners, read from the same vertices at set 1, give the face normal where
 /// the vertex has none (block entities) and `at_tangent` along the texture's u, as for terrain.
 pub fn inputs() -> patina_shaders::GbuffersInputs {
-    let declarations = "layout(location = 0) in vec3 hz_v_pos;\nlayout(location = 1) in vec2 hz_v_uv;\n\
-         layout(location = 2) in uint hz_v_overlay;\nlayout(location = 3) in vec4 hz_v_color;\n\
-         layout(location = 4) in uvec4 hz_v_light;\nlayout(location = 5) in vec4 hz_v_normal;\n\
-         layout(set = 1, binding = 0) readonly buffer HzEntityVertices { uint hz_entity_vertices[]; };\n\
-         vec4 hz_tangent; vec2 hz_mid;\n"
+    let declarations = "layout(location = 0) in vec3 pt_v_pos;\nlayout(location = 1) in vec2 pt_v_uv;\n\
+         layout(location = 2) in uint pt_v_overlay;\nlayout(location = 3) in vec4 pt_v_color;\n\
+         layout(location = 4) in uvec4 pt_v_light;\nlayout(location = 5) in vec4 pt_v_normal;\n\
+         layout(set = 1, binding = 0) readonly buffer PtEntityVertices { uint pt_entity_vertices[]; };\n\
+         vec4 pt_tangent; vec2 pt_mid;\n"
         .to_owned();
     let words = std::mem::size_of::<Vertex>() / 4;
     let corner = |k: usize, field: &str| {
-        let at = |o: usize| format!("hz_entity_vertices[hz_q + {}u]", k * words + o);
+        let at = |o: usize| format!("pt_entity_vertices[pt_q + {}u]", k * words + o);
         match field {
             "pos" => format!("uintBitsToFloat(uvec3({}, {}, {}))", at(0), at(1), at(2)),
             _ => format!("uintBitsToFloat(uvec2({}, {}))", at(3), at(4)),
         }
     };
     let body = format!(
-        "    uint hz_q = (uint(gl_VertexIndex) & ~3u) * {words}u;\n    \
-         vec3 hz_e1 = {p1} - {p0};\n    \
-         vec3 hz_e2 = {p2} - {p0};\n    \
-         vec2 hz_t0 = {t0};\n    \
-         vec2 hz_d1 = {t1} - hz_t0;\n    \
-         vec2 hz_d2 = {t2} - hz_t0;\n    \
-         hz_mid = (hz_t0 + {t2}) * 0.5;\n    \
-         vec3 hz_n = cross(hz_e1, hz_e2);\n    \
-         hz_Normal = dot(hz_v_normal.xyz, hz_v_normal.xyz) > 0.01 ? normalize(hz_v_normal.xyz)\n        \
-             : dot(hz_n, hz_n) > 1e-12 ? normalize(hz_n) : vec3(0.0, 1.0, 0.0);\n    \
-         hz_tangent = vec4(1.0, 0.0, 0.0, 1.0);\n    \
-         float hz_r = hz_d1.x * hz_d2.y - hz_d2.x * hz_d1.y;\n    \
-         vec3 hz_t = (hz_e1 * hz_d2.y - hz_e2 * hz_d1.y) * sign(hz_r);\n    \
-         vec3 hz_b = (hz_e2 * hz_d1.x - hz_e1 * hz_d2.x) * sign(hz_r);\n    \
-         hz_t -= hz_Normal * dot(hz_Normal, hz_t);\n    \
-         if (dot(hz_t, hz_t) > 1e-12) {{\n        \
-             hz_t = normalize(hz_t);\n        \
-             hz_tangent = vec4(hz_t, dot(cross(hz_t, hz_Normal), hz_b) < 0.0 ? -1.0 : 1.0);\n    \
+        "    uint pt_q = (uint(gl_VertexIndex) & ~3u) * {words}u;\n    \
+         vec3 pt_e1 = {p1} - {p0};\n    \
+         vec3 pt_e2 = {p2} - {p0};\n    \
+         vec2 pt_t0 = {t0};\n    \
+         vec2 pt_d1 = {t1} - pt_t0;\n    \
+         vec2 pt_d2 = {t2} - pt_t0;\n    \
+         pt_mid = (pt_t0 + {t2}) * 0.5;\n    \
+         vec3 pt_n = cross(pt_e1, pt_e2);\n    \
+         pt_Normal = dot(pt_v_normal.xyz, pt_v_normal.xyz) > 0.01 ? normalize(pt_v_normal.xyz)\n        \
+             : dot(pt_n, pt_n) > 1e-12 ? normalize(pt_n) : vec3(0.0, 1.0, 0.0);\n    \
+         pt_tangent = vec4(1.0, 0.0, 0.0, 1.0);\n    \
+         float pt_r = pt_d1.x * pt_d2.y - pt_d2.x * pt_d1.y;\n    \
+         vec3 pt_t = (pt_e1 * pt_d2.y - pt_e2 * pt_d1.y) * sign(pt_r);\n    \
+         vec3 pt_b = (pt_e2 * pt_d1.x - pt_e1 * pt_d2.x) * sign(pt_r);\n    \
+         pt_t -= pt_Normal * dot(pt_Normal, pt_t);\n    \
+         if (dot(pt_t, pt_t) > 1e-12) {{\n        \
+             pt_t = normalize(pt_t);\n        \
+             pt_tangent = vec4(pt_t, dot(cross(pt_t, pt_Normal), pt_b) < 0.0 ? -1.0 : 1.0);\n    \
          }}\n    \
-         hz_Vertex = vec4(hz_v_pos, 1.0);\n    \
-         hz_MultiTexCoord0 = vec4(hz_v_uv, 0.0, 1.0);\n    \
-         hz_MultiTexCoord1 = vec4(float(hz_v_light.y), float(hz_v_light.x), 0.0, 1.0);\n    \
-         hz_MultiTexCoord2 = hz_MultiTexCoord1;\n    \
-         hz_Color = hz_v_color;\n",
+         pt_Vertex = vec4(pt_v_pos, 1.0);\n    \
+         pt_MultiTexCoord0 = vec4(pt_v_uv, 0.0, 1.0);\n    \
+         pt_MultiTexCoord1 = vec4(float(pt_v_light.y), float(pt_v_light.x), 0.0, 1.0);\n    \
+         pt_MultiTexCoord2 = pt_MultiTexCoord1;\n    \
+         pt_Color = pt_v_color;\n",
         p0 = corner(0, "pos"),
         p1 = corner(1, "pos"),
         p2 = corner(2, "pos"),
@@ -79,14 +79,14 @@ pub fn inputs() -> patina_shaders::GbuffersInputs {
         t2 = corner(2, "uv"),
     );
     let attributes = [
-        ("at_tangent", "hz_tangent"),
-        ("mc_midTexCoord", "vec4(hz_mid, 0.0, 1.0)"),
-        ("vaPosition", "hz_Vertex.xyz"),
-        ("vaUV0", "hz_v_uv"),
+        ("at_tangent", "pt_tangent"),
+        ("mc_midTexCoord", "vec4(pt_mid, 0.0, 1.0)"),
+        ("vaPosition", "pt_Vertex.xyz"),
+        ("vaUV0", "pt_v_uv"),
         ("vaUV1", "ivec2(0, 10)"),
-        ("vaUV2", "ivec2(hz_MultiTexCoord1.xy)"),
-        ("vaColor", "hz_Color"),
-        ("vaNormal", "hz_Normal"),
+        ("vaUV2", "ivec2(pt_MultiTexCoord1.xy)"),
+        ("vaColor", "pt_Color"),
+        ("vaNormal", "pt_Normal"),
     ];
     patina_shaders::GbuffersInputs {
         declarations,
@@ -108,24 +108,24 @@ pub fn inputs() -> patina_shaders::GbuffersInputs {
 /// position moved by the clouds' offset, the colour of the face's shade from their palette,
 /// full sky light. Set 1 holds the clouds' uniform (`clouds::Uniform`).
 pub fn cloud_inputs() -> patina_shaders::GbuffersInputs {
-    let declarations = "layout(location = 0) in vec3 hz_v_pos;\nlayout(location = 1) in vec2 hz_v_uv;\n\
-         layout(location = 2) in uint hz_v_overlay;\nlayout(location = 3) in vec4 hz_v_color;\n\
-         layout(location = 4) in uvec4 hz_v_light;\nlayout(location = 5) in vec4 hz_v_normal;\n\
-         layout(set = 1, binding = 0) uniform HzCloud { vec4 hz_cloud_offset; vec4 hz_cloud_colors[4]; };\n"
+    let declarations = "layout(location = 0) in vec3 pt_v_pos;\nlayout(location = 1) in vec2 pt_v_uv;\n\
+         layout(location = 2) in uint pt_v_overlay;\nlayout(location = 3) in vec4 pt_v_color;\n\
+         layout(location = 4) in uvec4 pt_v_light;\nlayout(location = 5) in vec4 pt_v_normal;\n\
+         layout(set = 1, binding = 0) uniform PtCloud { vec4 pt_cloud_offset; vec4 pt_cloud_colors[4]; };\n"
         .to_owned();
-    let body = "    hz_Vertex = vec4(hz_v_pos + hz_cloud_offset.xyz, 1.0);\n    \
-         hz_MultiTexCoord0 = vec4(hz_v_uv, 0.0, 1.0);\n    \
-         hz_MultiTexCoord1 = vec4(0.0, 240.0, 0.0, 1.0);\n    \
-         hz_MultiTexCoord2 = hz_MultiTexCoord1;\n    \
-         hz_Color = hz_cloud_colors[min(hz_v_light.x, 3u)];\n    \
-         hz_Normal = dot(hz_v_normal.xyz, hz_v_normal.xyz) > 0.01 ? normalize(hz_v_normal.xyz) : vec3(0.0, 1.0, 0.0);\n"
+    let body = "    pt_Vertex = vec4(pt_v_pos + pt_cloud_offset.xyz, 1.0);\n    \
+         pt_MultiTexCoord0 = vec4(pt_v_uv, 0.0, 1.0);\n    \
+         pt_MultiTexCoord1 = vec4(0.0, 240.0, 0.0, 1.0);\n    \
+         pt_MultiTexCoord2 = pt_MultiTexCoord1;\n    \
+         pt_Color = pt_cloud_colors[min(pt_v_light.x, 3u)];\n    \
+         pt_Normal = dot(pt_v_normal.xyz, pt_v_normal.xyz) > 0.01 ? normalize(pt_v_normal.xyz) : vec3(0.0, 1.0, 0.0);\n"
         .to_owned();
     let attributes = [
-        ("vaPosition", "hz_Vertex.xyz"),
-        ("vaUV0", "hz_v_uv"),
+        ("vaPosition", "pt_Vertex.xyz"),
+        ("vaUV0", "pt_v_uv"),
         ("vaUV2", "ivec2(0, 240)"),
-        ("vaColor", "hz_Color"),
-        ("vaNormal", "hz_Normal"),
+        ("vaColor", "pt_Color"),
+        ("vaNormal", "pt_Normal"),
     ];
     patina_shaders::GbuffersInputs {
         declarations,
@@ -156,7 +156,7 @@ pub fn entity_color(overlay: u32) -> [f32; 4] {
     }
 }
 
-/// One draw: its quads in `PackEntities`' buffer, its program and its slot of `HzDraw`.
+/// One draw: its quads in `PackEntities`' buffer, its program and its slot of `PtDraw`.
 pub(super) struct Draw {
     /// The first vertex.
     pub base: u32,

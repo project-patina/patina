@@ -325,7 +325,7 @@ pub async fn run_hook(cmd: &str, cwd: &Path) -> Result<()> {
     hide_console(&mut command);
     let status = command.status().await?;
     if !status.success() {
-        crate::bail!("Komenda „{cmd}” zakończyła się błędem ({status})");
+        crate::bail!("Komenda „{cmd}” zakończyła się błędem ({status})", "Command \"{cmd}\" failed ({status})");
     }
     Ok(())
 }

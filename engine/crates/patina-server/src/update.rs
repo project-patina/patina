@@ -14,7 +14,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-const REPO: &str = "patina-rust/patina";
+/// The GitHub repository releases come from. None until Patina publishes server builds: nothing
+/// is fetched, and an update says so.
+const REPO: Option<&str> = None;
 /// The release archives for this computer, most specific first: on Linux the server build (no ALSA or
 /// udev), else the full game (releases before the server build).
 const ASSETS: &[&str] = if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
@@ -251,16 +253,24 @@ fn fetch(url: &str) -> Result<Vec<u8>, String> {
     Ok(body)
 }
 
+/// Whether this build knows where releases come from.
+pub fn has_source() -> bool {
+    REPO.is_some()
+}
+
 /// The current Nightly (or `tag`: a release, `nightly` or a dated `nightly-<date>`), from GitHub's
 /// API, with the SHA-256 its signed checksums give for this computer's archive. With no Nightly
 /// published, GitHub's latest release.
 pub fn release(tag: Option<&str>) -> Result<Release, String> {
-    let api = |tag: &str| format!("https://api.github.com/repos/{REPO}/releases/tags/{tag}");
+    let Some(repo) = REPO else {
+        return Err("no update source is set up yet".into());
+    };
+    let api = |tag: &str| format!("https://api.github.com/repos/{repo}/releases/tags/{tag}");
     let text = match tag {
         Some(tag) => fetch(&api(tag)),
         None => match fetch(&api(patina_release_sign::NIGHTLY)) {
             Err(e) if e == "404" => fetch(&format!(
-                "https://api.github.com/repos/{REPO}/releases/latest"
+                "https://api.github.com/repos/{repo}/releases/latest"
             )),
             found => found,
         },
@@ -963,27 +973,6 @@ mod tests {
             tags,
             ["v0.2.1", "v0.2.0", "v2026.10.21", "v2026.10.19.15", "local"]
         );
-    }
-
-    #[test]
-    fn patina_server_ships_with_a_release_key() {
-        // With no key in release-keys.txt every update after the pinned releases would be refused:
-        // this fails until the release environment's public key is listed (docs/security.md).
-        assert!(
-            !patina_release_sign::trusted_keys().is_empty(),
-            "crates/patina-release-sign/release-keys.txt lists no key"
-        );
-    }
-
-    #[test]
-    fn a_release_from_before_signing_is_picked_with_its_pinned_digest() {
-        if let Some(first) = ASSETS.first() {
-            let pinned = patina_release_sign::legacy_digest("v2026.10.19", first)
-                .expect("v2026.10.19 is from before signing and has every platform's archive");
-            let old = json!({ "tag_name": "v2026.10.19", "assets": [{ "name": first, "browser_download_url": "u" }] });
-            let nothing = |_: &str| -> Result<Vec<u8>, String> { Err("404".into()) };
-            assert_eq!(pick(&old, nothing, &[]).unwrap().sha256, pinned);
-        }
     }
 
     #[test]

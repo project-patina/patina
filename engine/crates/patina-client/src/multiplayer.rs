@@ -17,8 +17,6 @@ use std::{
 const SERVER_NAME: crate::clipboard::FieldId = ("server.name", 0);
 const SERVER_ADDRESS: crate::clipboard::FieldId = ("server.address", 0);
 const SERVER_DIRECT: crate::clipboard::FieldId = ("server.direct", 0);
-const FRIEND_CODE: crate::clipboard::FieldId = ("friend.code", 0);
-const FRIEND_RELAY: crate::clipboard::FieldId = ("friend.relay", 0);
 
 /// The result of pinging one address.
 #[derive(Clone, Debug)]
@@ -109,18 +107,8 @@ pub enum Screen {
         name: String,
         lines: std::cell::Cell<usize>,
     },
-    /// Join a friend's world with its invite code (Patina's own, behind the
-    /// title screen's Friends button).
-    Friend {
-        code: String,
-        /// The relay for short codes (optional; saved on Join).
-        relay: String,
-        focus: u8,
-    },
     Disconnected {
         reason: String,
-        /// Auto-reconnect's next attempt, until it is cancelled.
-        retry: Option<crate::reconnect::Retry>,
     },
 }
 /// What a click asks the title screen to do.
@@ -629,48 +617,14 @@ impl Screen {
                     53,
                 ),
             ],
-            Self::Friend { code, .. } => vec![
-                b(
-                    half(w) - 100.0,
-                    quarter(h) + 96.0 + 18.0,
-                    200.0,
-                    &crate::lang::get_or("patina.multiplayer.join", "Join"),
-                    patina_friends::invite::parse(code).is_some(),
-                    56,
-                ),
-                b(
-                    half(w) - 100.0,
-                    quarter(h) + 120.0 + 18.0,
-                    200.0,
-                    &crate::lang::get_or("gui.cancel", "Cancel"),
-                    true,
-                    57,
-                ),
-            ],
-            Self::Disconnected { retry, .. } => {
-                let mut v = vec![b(
-                    half(w) - 100.0,
-                    half(h) + 30.0,
-                    200.0,
-                    &crate::lang::get_or("gui.toMenu", "Back to Server List"),
-                    true,
-                    54,
-                )];
-                if retry.is_some() {
-                    v.push(b(
-                        half(w) - 100.0,
-                        half(h) + 54.0,
-                        200.0,
-                        &crate::lang::get_or(
-                            "patina.multiplayer.cancel_reconnecting",
-                            "Cancel Reconnecting",
-                        ),
-                        true,
-                        55,
-                    ));
-                }
-                v
-            }
+            Self::Disconnected { .. } => vec![b(
+                half(w) - 100.0,
+                half(h) + 30.0,
+                200.0,
+                &crate::lang::get_or("gui.toMenu", "Back to Server List"),
+                true,
+                54,
+            )],
         }
     }
     /// An EditBox and its label: the label at `label_y` (one pixel in, in
@@ -715,7 +669,7 @@ impl Screen {
         cursor: (f32, f32),
     ) {
         let (w, h) = (batch.width, batch.height);
-        let max = self.max_length();
+        let max = 128;
         crate::ui::menu_background(batch, atlas, 0.0, 0.0, w, h, false);
         // GuiGraphicsExtractor.centeredText at width / 2: x - width(text) / 2.
         let centered = |batch: &mut HudBatch, text: &str, y: f32, color: u32| {
@@ -1031,39 +985,7 @@ impl Screen {
                     centered(batch, &line.plain(), top + 17.0 + i as f32 * 9.0, u32::MAX);
                 }
             }
-            Self::Friend { code, relay, focus } => {
-                centered(
-                    batch,
-                    &crate::lang::get_or("patina.multiplayer.join_friend", "Join a Friend"),
-                    20.0,
-                    u32::MAX,
-                );
-                Self::field(
-                    atlas,
-                    batch,
-                    caret,
-                    focused_at,
-                    &crate::lang::get_or("patina.multiplayer.invite_code", "Invite Code"),
-                    code,
-                    FRIEND_CODE,
-                    max,
-                    (53.0, 64.0),
-                    *focus == 0,
-                );
-                Self::field(
-                    atlas,
-                    batch,
-                    caret,
-                    focused_at,
-                    &crate::lang::get_or("patina.multiplayer.relay", "Relay (optional)"),
-                    relay,
-                    FRIEND_RELAY,
-                    max,
-                    (94.0, 105.0),
-                    *focus == 1,
-                );
-            }
-            Self::Disconnected { reason, retry } => {
+            Self::Disconnected { reason } => {
                 centered(
                     batch,
                     &crate::lang::get_or("disconnect.lost", "Connection Lost"),
@@ -1073,10 +995,6 @@ impl Screen {
                 for (i, line) in wrap(reason, 300.0, atlas).iter().enumerate() {
                     centered(batch, line, half(h) - 16.0 + i as f32 * 9.0, u32::MAX);
                 }
-                if let Some(r) = retry {
-                    let text = r.text(std::time::Instant::now());
-                    centered(batch, &text, half(h) + 16.0, rgba(170, 170, 170, 255));
-                }
             }
         }
     }
@@ -1085,7 +1003,7 @@ impl Screen {
     pub fn confirm(&self) -> Outcome {
         match self {
             Self::Direct { address } if servers::parse_address(address).is_some() => {
-                Outcome::Connect(direct_address(address))
+                Outcome::Connect(address.trim().to_owned())
             }
             _ => Outcome::None,
         }
@@ -1118,7 +1036,6 @@ impl Screen {
                     address: String::new(),
                 }
             }
-            (Self::List { .. }, Some(47)) => *self = Self::friend(),
             (Self::List { .. }, Some(42)) => {
                 *self = Self::Edit {
                     index: None,
@@ -1289,33 +1206,14 @@ impl Screen {
                 *self = Self::list(saves);
             }
             (
-                Self::Edit { .. }
-                | Self::Direct { .. }
-                | Self::Friend { .. }
-                | Self::Disconnected { .. },
-                Some(51 | 53 | 54 | 57),
+                Self::Edit { .. } | Self::Direct { .. } | Self::Disconnected { .. },
+                Some(51 | 53 | 54),
             ) => *self = Self::list(saves),
-            (Self::Disconnected { retry, .. }, Some(55)) => *retry = None,
             (Self::Direct { address }, Some(52)) => {
-                return Outcome::Connect(direct_address(address));
+                return Outcome::Connect(address.trim().to_owned());
             }
-            (Self::Friend { code, relay, .. }, Some(56)) => {
-                if patina_friends::invite::parse(code).is_some() {
-                    crate::net::save_friends_relay(relay.trim());
-                    let code: String = code.chars().filter(|c| !c.is_whitespace()).collect();
-                    return Outcome::Connect(format!("{}{code}", crate::net::FRIEND));
-                }
-            }
-            (Self::Edit { .. } | Self::Friend { .. }, None) => {
-                let boxes = if matches!(self, Self::Edit { .. }) {
-                    [66.0, 106.0]
-                } else {
-                    [64.0, 105.0]
-                };
-                let (Self::Edit { focus, .. } | Self::Friend { focus, .. }) = self else {
-                    unreachable!()
-                };
-                for (i, fy) in [(0u8, boxes[0]), (1, boxes[1])] {
+            (Self::Edit { focus, .. }, None) => {
+                for (i, fy) in [(0u8, 66.0), (1, 106.0)] {
                     if y >= fy && y < fy + 20.0 && (half(w) - 100.0..half(w) + 100.0).contains(&x) {
                         *focus = i;
                     }
@@ -1365,14 +1263,12 @@ impl Screen {
         }
     }
     /// The focused box, in GUI pixels: name at 66, address at 106
-    /// (`ManageServerScreen`), direct address at 116, friend fields at 64 and 105.
+    /// (`ManageServerScreen`), direct address at 116.
     pub fn focused_box(&self, (w, _h): (f32, f32)) -> Option<[f32; 4]> {
         let y = match self {
             Self::Edit { focus: 0, .. } => 66.0,
             Self::Edit { .. } => 106.0,
             Self::Direct { .. } => 116.0,
-            Self::Friend { focus: 0, .. } => 64.0,
-            Self::Friend { .. } => 105.0,
             _ => return None,
         };
         Some([(w / 2.0).floor() - 100.0, y, 200.0, 20.0])
@@ -1386,29 +1282,8 @@ impl Screen {
                 ..
             } => Some(if *focus == 0 { name } else { address }),
             Self::Direct { address } => Some(address),
-            Self::Friend {
-                code, relay, focus, ..
-            } => Some(if *focus == 0 { code } else { relay }),
             _ => None,
         }
-    }
-    /// Join a friend, with the relay the player set before.
-    pub fn friend() -> Self {
-        Self::Friend {
-            code: String::new(),
-            relay: crate::net::friends_relay_setting().unwrap_or_default(),
-            focus: 0,
-        }
-    }
-    /// Auto-reconnect's attempt, once its countdown is over.
-    pub fn due_retry(&mut self) -> Option<crate::reconnect::Retry> {
-        let Self::Disconnected { retry, .. } = self else {
-            return None;
-        };
-        if !retry.as_ref()?.due(std::time::Instant::now()) {
-            return None;
-        }
-        retry.take()
     }
     /// The focused text field, its id and maximum length (copy and paste).
     pub fn focused_text(&mut self) -> Option<(crate::clipboard::FieldId, &mut String, usize)> {
@@ -1416,23 +1291,12 @@ impl Screen {
             Self::Edit { focus: 0, .. } => SERVER_NAME,
             Self::Edit { .. } => SERVER_ADDRESS,
             Self::Direct { .. } => SERVER_DIRECT,
-            Self::Friend { focus: 0, .. } => FRIEND_CODE,
-            Self::Friend { .. } => FRIEND_RELAY,
             _ => return None,
         };
-        let max = self.max_length();
-        self.focused_field().map(|f| (id, f, max))
-    }
-    /// Invite codes with IPv6 and a relay run past a server address's 128.
-    fn max_length(&self) -> usize {
-        if matches!(self, Self::Friend { .. }) {
-            256
-        } else {
-            128
-        }
+        self.focused_field().map(|f| (id, f, 128))
     }
     pub fn tab(&mut self) {
-        if let Self::Edit { focus, .. } | Self::Friend { focus, .. } = self {
+        if let Self::Edit { focus, .. } = self {
             *focus = (*focus + 1) % 2;
         }
     }
@@ -1459,19 +1323,6 @@ impl Screen {
     }
 }
 
-/// Direct Connection's address; a full invite code pasted there joins the
-/// friend (a short relay code could be a host name, so it needs Join a Friend).
-fn direct_address(address: &str) -> String {
-    let code: String = address.chars().filter(|c| !c.is_whitespace()).collect();
-    if matches!(
-        patina_friends::invite::parse(&code),
-        Some(patina_friends::invite::Parsed::Long(_))
-    ) {
-        format!("{}{code}", crate::net::FRIEND)
-    } else {
-        address.trim().to_owned()
-    }
-}
 /// Greedy word wrap to a pixel width.
 pub fn wrap(text: &str, width: f32, atlas: &HudAtlas) -> Vec<String> {
     let mut lines = Vec::new();
@@ -1498,24 +1349,6 @@ pub fn wrap(text: &str, width: f32, atlas: &HudAtlas) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn direct_connection_joins_a_pasted_invite_and_keeps_host_names() {
-        let invite = patina_friends::invite::Invite {
-            secret: *b"0123456789",
-            port: 25580,
-            endpoints: vec!["192.168.1.20:25580".parse().unwrap()],
-            relay: None,
-        }
-        .encode();
-        assert_eq!(
-            direct_address(&format!(" {invite} ")),
-            format!("{}{invite}", crate::net::FRIEND)
-        );
-        for host in ["localhost", "example.org:25566", "abcdefgh", "[::1]:25568"] {
-            assert_eq!(direct_address(host), host);
-        }
-    }
 
     #[test]
     fn ping_tooltip_follows_only_visible_status_bars_and_current_ping() {
@@ -1587,15 +1420,8 @@ mod tests {
         };
         assert_eq!(at(&direct, 427.0, 334.0), [(113.0, 191.0), (113.0, 215.0)]);
         assert_eq!(at(&direct, 320.0, 240.0), [(60.0, 168.0), (60.0, 192.0)]);
-        let friend = Screen::Friend {
-            code: String::new(),
-            relay: String::new(),
-            focus: 0,
-        };
-        assert_eq!(at(&friend, 427.0, 253.0), [(113.0, 177.0), (113.0, 201.0)]);
         let lost = Screen::Disconnected {
             reason: String::new(),
-            retry: None,
         };
         assert_eq!(at(&lost, 427.0, 253.0), [(113.0, 156.0)]);
         // centeredText: `width / 2 - font.width(text) / 2`.

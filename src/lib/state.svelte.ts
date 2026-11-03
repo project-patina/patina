@@ -1,8 +1,15 @@
 import { api, errText, events } from "./api";
-import type { Account, AppInfo, ContentKind, Image, Instance, LogLine, Progress, ReleaseNote, Settings, VersionList } from "./types";
-import { createSettingsWriter } from "./settingsWriter";
+import type { Account, AnnouncementFeed, AppInfo, ContentKind, Image, Instance, LogLine, Progress, Settings, VersionList } from "./types";
+import { accentForeground, usableAccent } from "./color";
+import { t } from "./i18n.svelte";
+import type { Lang } from "./locales/resolve";
+import { adoptSaved, createSettingsWriter } from "./settingsWriter";
 
-export type Page = "home" | "instances" | "instance" | "discover" | "wardrobe" | "settings" | "pose" | "news";
+const PAGES = ["home", "instances", "instance", "discover", "servers", "wardrobe", "settings"] as const;
+export type Page = (typeof PAGES)[number];
+
+export const SETTINGS_SECTIONS = ["general", "look", "game", "engine", "java", "advanced", "accounts", "about"] as const;
+export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 
 export interface Toast {
   id: number;
@@ -21,14 +28,16 @@ export const app = $state({
   info: null as AppInfo | null,
   settings: null as Settings | null,
   settingsSave: "saved" as "saved" | "pending" | "error",
-  news: null as ReleaseNote[] | null,
+  announcements: null as AnnouncementFeed | null,
   accounts: [] as Account[],
   instances: [] as Instance[],
   versions: null as VersionList | null,
   page: "home" as Page,
+  settingsSection: "general" as SettingsSection,
+  addAccountOpen: false,
   instanceId: null as string | null,
   /** Instance tab to open when navigating to the instance view. */
-  instanceTab: "mods" as "mods" | "settings" | "console",
+  instanceTab: "mods" as "mods" | "official" | "settings" | "console",
   /** Per-instance: "preparing" | "running". */
   running: {} as Record<string, "preparing" | "running">,
   progress: {} as Record<string, Progress>,
@@ -88,14 +97,12 @@ export function applyTheme(s: Settings | null = app.settings) {
   const light = s.theme === "light" || (s.theme === "system" && media?.matches);
   root.dataset.theme = light ? "light" : "dark";
   root.dataset.palette = s.palette;
-  root.style.setProperty("--accent", s.accent);
-  const rgb = [1, 3, 5].map((offset) => parseInt(s.accent.slice(offset, offset + 2), 16) / 255)
-    .map((c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-  const luminance = rgb[0] * 0.2126 + rgb[1] * 0.7152 + rgb[2] * 0.0722;
-  root.style.setProperty("--accent-fg", luminance > 0.179 ? "#09090b" : "#ffffff");
+  // Measured against the page background: each palette tints it only slightly.
+  const accent = usableAccent(s.accent, light ? "#f2f3f3" : "#17191a");
+  root.style.setProperty("--accent", accent);
+  root.style.setProperty("--accent-fg", accentForeground(accent));
   root.style.setProperty("--ui-scale", String(s.uiScale));
   root.classList.toggle("no-anim", !s.animations);
-  root.classList.toggle("no-blur", !s.blur);
   root.classList.toggle("compact", s.compact);
   root.dataset.radius = s.radius;
   root.dataset.font = s.font;
@@ -111,12 +118,7 @@ const settingsWriter = createSettingsWriter<Settings>({
   save: (settings) => api.saveSettings(settings),
   onSaved(saved, submitted) {
     if (!app.settings) return;
-    // Adopt backend normalization only if this field has not been edited since.
-    for (const key of Object.keys(saved) as (keyof Settings)[]) {
-      if (JSON.stringify(app.settings[key]) === JSON.stringify(submitted[key])) {
-        Object.assign(app.settings, { [key]: saved[key] });
-      }
-    }
+    Object.assign(app.settings, adoptSaved($state.snapshot(app.settings) as Settings, saved, submitted));
     app.settingsSave = settingsWriter.hasPending() ? "pending" : "saved";
     applyTheme();
   },
@@ -164,10 +166,18 @@ export async function loadVersions() {
   return app.versions;
 }
 
-export async function loadNews() {
-  if (app.news) return app.news;
-  app.news = await api.listNews();
-  return app.news;
+let announcementsFor: Lang | undefined;
+
+/** The newest language asked for wins; a slower older response is dropped. */
+export async function loadAnnouncements(language: Lang) {
+  if (announcementsFor === language) return;
+  announcementsFor = language;
+  try {
+    const feed = await api.announcements(language);
+    if (announcementsFor === language) app.announcements = feed;
+  } catch {
+    if (announcementsFor === language) app.announcements = { items: [], source: "none" };
+  }
 }
 
 export async function init() {
@@ -208,13 +218,13 @@ export async function init() {
         case "cancelled":
           delete app.running[s.id];
           delete app.progress[s.id];
-          if (s.state === "cancelled") toast(`Anulowano przygotowanie „${name}”`);
+          if (s.state === "cancelled") toast(t("errors.launchCancelled", { name }));
           void refreshInstances().catch(toastError);
           break;
         case "error":
           delete app.running[s.id];
           delete app.progress[s.id];
-          toast(s.message ?? "Nie udało się uruchomić gry", "error", 9000);
+          toast(s.message ?? t("errors.launchFailed"), "error", 9000);
           break;
       }
     }));
@@ -224,25 +234,31 @@ export async function init() {
     unlisten.forEach((stop) => stop());
     throw error;
   }
-  if (info.startPage && ["home", "instances", "discover", "wardrobe", "settings", "pose", "news"].includes(info.startPage)) app.page = info.startPage as Page;
+  if (info.startPage && PAGES.includes(info.startPage as Page) && info.startPage !== "instance") app.page = info.startPage as Page;
+  if (import.meta.env.DEV) {
+    const section = new URLSearchParams(location.search).get("section") as SettingsSection | null;
+    if (section && SETTINGS_SECTIONS.includes(section)) app.settingsSection = section;
+  }
   app.ready = true;
   return () => unlisten.forEach((stop) => stop());
 }
 
 const pendingLaunches = new Set<string>();
 
-export async function play(id: string) {
+/** `join`: a server to join once the game is up, this time only. */
+export async function play(id: string, join?: string) {
   if (app.running[id] || pendingLaunches.has(id)) return;
   if (!activeAccount()) {
-    toast("Najpierw zaloguj się kontem Microsoft", "error");
+    toast(t("errors.loginFirst"), "error");
     return;
   }
   pendingLaunches.add(id);
   try {
     await flushSettings();
     app.running[id] = "preparing";
-    await api.launch(id);
+    // Before the call: the backend records this too, and a pick made during launch must win.
     if (app.settings) app.settings.lastInstance = id;
+    await api.launch(id, join);
   } catch (e) {
     delete app.running[id];
     toastError(e);

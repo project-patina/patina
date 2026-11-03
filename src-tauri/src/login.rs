@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 
 use amethyst_core::accounts::{self, AccountView};
 use amethyst_core::auth::{self, DeviceCode, MsTokens};
-use amethyst_core::{Error, Result};
+use amethyst_core::{lang, tr, Error, Result};
 use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tokio::sync::oneshot;
@@ -46,7 +46,7 @@ pub async fn login_microsoft(app: AppHandle, state: State<'_, AppState>) -> Resu
     let nav_tx = tx.clone();
     let load_tx = tx.clone();
     let window = WebviewWindowBuilder::new(&app, LOGIN_LABEL, WebviewUrl::External(url))
-        .title("Zaloguj się — Microsoft")
+        .title(lang::tr("Zaloguj się — Microsoft", "Sign in — Microsoft"))
         .inner_size(500.0, 660.0)
         .resizable(true)
         .center()
@@ -67,7 +67,7 @@ pub async fn login_microsoft(app: AppHandle, state: State<'_, AppState>) -> Resu
             }
         })
         .build()
-        .map_err(|e| Error::msg(format!("Nie udało się otworzyć okna logowania: {e}")))?;
+        .map_err(|e| Error::msg(tr!("Nie udało się otworzyć okna logowania: {e}", "Could not open the sign-in window: {e}")))?;
 
     let close_tx = tx.clone();
     window.on_window_event(move |e| {

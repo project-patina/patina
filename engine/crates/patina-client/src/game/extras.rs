@@ -1,19 +1,15 @@
-//! Patina's extras in the game (`docs/extras.md`); a native mod's minimap
-//! (`native_minimap`: its tiles, image and HUD) and zoom (`native_zoom`) on the camera; clicks
-//! and frame times for mods (`native_clicks`, `native_frame_rate`).
-//! Each hook does nothing while its extra is off and no mod uses it.
+//! What `.pmod` mods get from the game: a minimap (`native_minimap`: its tiles, image and HUD),
+//! zoom (`native_zoom`) on the camera, clicks and frame times (`native_clicks`,
+//! `native_frame_rate`). Each hook does nothing while no mod uses it.
 use super::{Dim, Game, Screen, native_hooks::NativeMinimap};
 use patina_client::{
     extras::{Corner, Cps, FpsCounter, fov_target},
     extras_hud::{self, Corners},
     hud::{HudBatch, MINIMAP_SPRITE},
     minimap::{self, Layer, Minimap, View},
-    multiplayer,
-    reconnect::{Retry, Tracker},
-    title::Mode,
 };
 use std::time::Duration;
-use winit::event::MouseButton;
+use winit::{event::MouseButton, keyboard::KeyCode};
 
 #[derive(Default)]
 pub(super) struct ExtrasState {
@@ -24,8 +20,6 @@ pub(super) struct ExtrasState {
     minimap: Minimap,
     /// The dimension the minimap's tiles belong to.
     minimap_dim: Option<Dim>,
-    /// Auto-reconnect's attempts at the current server.
-    reconnect: Tracker,
 }
 /// CPU time the minimap's tiles may take per frame.
 const MINIMAP_BUDGET: Duration = Duration::from_micros(300);
@@ -74,55 +68,6 @@ impl Game<'_> {
         let [l, r] = &mut self.extras.cps;
         let cps = (l.per_second(now) as u32, r.per_second(now) as u32);
         (cps, self.extras.mouse)
-    }
-    /// Auto-reconnect: a connection to `address` as `name` starts.
-    pub(super) fn extras_connecting(&mut self, address: &str, name: &str) {
-        self.extras.reconnect.connecting(address, name);
-    }
-    /// Auto-reconnect: the server let the player in.
-    pub(super) fn extras_joined(&mut self) {
-        self.extras.reconnect.joined(std::time::Instant::now());
-    }
-    /// Auto-reconnect: the player left the server on purpose.
-    pub(super) fn extras_left(&mut self) {
-        self.extras.reconnect.reset();
-    }
-    /// Auto-reconnect's next attempt after a disconnect, when it is on and
-    /// the reason allows one.
-    pub(super) fn reconnect_after(&mut self, reason: &str, from_server: bool) -> Option<Retry> {
-        if !self.settings.extras.auto_reconnect {
-            self.extras.reconnect.reset();
-            return None;
-        }
-        let now = std::time::Instant::now();
-        self.extras.reconnect.ended(reason, from_server, now)
-    }
-    /// Show the attempt's countdown on the Disconnected screen.
-    pub(super) fn offer_reconnect(&mut self, retry: Option<Retry>) {
-        let Some(retry) = retry else {
-            return;
-        };
-        if let Some(title) = self.title.as_mut()
-            && let Mode::Multiplayer(multiplayer::Screen::Disconnected { retry: slot, .. }) =
-                &mut title.mode
-        {
-            log::info!(
-                "Patina: reconnecting to {} in {} s",
-                patina_client::net::shown_address(&retry.address),
-                retry.seconds_left(std::time::Instant::now())
-            );
-            *slot = Some(retry);
-        }
-    }
-    /// Auto-reconnect: connect again once the countdown is over. An
-    /// online-mode server gets the signed-in account again: `connect_server`
-    /// takes it from `auth::current()`, held in memory for the whole run
-    /// (the launcher's session file is gone after the first read).
-    pub(super) fn extras_retry(&mut self) -> patina_client::Result<()> {
-        if let Some(retry) = self.title.as_mut().and_then(|t| t.due_retry()) {
-            self.connect_server(&retry.address, &retry.name)?;
-        }
-        Ok(())
     }
     /// The minimap a mod shows (`native_minimap`): its corner, its side
     /// in GUI pixels and its view of the player.
@@ -227,7 +172,8 @@ impl Game<'_> {
     /// by the caller). The top left corner gives way to the debug screen.
     pub(super) fn draw_extras(&mut self, batch: &mut HudBatch) {
         let map = self.minimap_shown();
-        let visible = |corner| !(self.debug && corner == Corner::TopLeft);
+        let debug = self.debug;
+        let visible = move |corner| !(debug && corner == Corner::TopLeft);
         let mut corners = Corners::new(batch.width, batch.height, self.effect_rows_height());
         let atlas = &self.gui.atlas;
         if let Some((map_corner, map_size, view)) = map
@@ -250,6 +196,40 @@ impl Game<'_> {
             extras_hud::draw_minimap(batch, atlas, &mut corners, &look);
         }
         self.native_hud(batch, &mut corners);
+        // The built-in mods each have a place of their own, and give way to
+        // the whole debug screen and to the HUD editor, which draws them
+        // itself where they are being dragged, as the Fabric mod's do.
+        let readings = self.mod_readings();
+        extras_hud::remember(&readings);
+        if debug || extras_hud::editor_open() {
+            return;
+        }
+        let settings = patina_client::client_settings::get();
+        let position = !self.reduced_debug_info();
+        let atlas = &self.gui.atlas;
+        extras_hud::draw_mods(batch, atlas, &settings.mods, &readings, position);
+    }
+    /// What the built-in HUD mods show.
+    fn mod_readings(&self) -> extras_hud::ModReadings {
+        let held = |key| self.keys.contains(&key);
+        let position = self
+            .player
+            .as_ref()
+            .map_or([0.0; 3], |p| [p.position.x, p.position.y, p.position.z]);
+        extras_hud::ModReadings {
+            fps: self.extras.fps.reading(),
+            // Keys are held by their default binding, whatever is bound to them.
+            keys: [
+                held(KeyCode::KeyW),
+                held(KeyCode::KeyA),
+                held(KeyCode::KeyS),
+                held(KeyCode::KeyD),
+                self.extras.mouse[0],
+                self.extras.mouse[1],
+            ],
+            position,
+            yaw: self.yaw,
+        }
     }
     /// The height the status effect icons take at the top right
     /// (`Hud.extractEffects`: beneficial at y 1, harmful at y 26).

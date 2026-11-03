@@ -3,7 +3,8 @@
   import LoaderPicker from "./LoaderPicker.svelte";
   import { api } from "../lib/api";
   import { loaderLabel } from "../lib/format";
-  import { app, flushSettings, loadVersions, navigate, refreshInstances, toast, toastError } from "../lib/state.svelte";
+  import { t } from "../lib/i18n.svelte";
+  import { app, flushSettings, loadVersions, navigate, refreshInstances, toast, toastError, updateSettings } from "../lib/state.svelte";
   import type { Loader } from "../lib/types";
 
   let mc = $state("");
@@ -29,9 +30,9 @@
       await flushSettings();
       const inst = await api.createInstance({ name: name.trim() || autoName, mcVersion: mc, loader, loaderVersion: null, icon: "grass", banner: "aurora" });
       await refreshInstances();
-      app.settings!.lastInstance = inst.id;
+      updateSettings({ lastInstance: inst.id });
       app.newInstanceOpen = false;
-      toast(`Utworzono „${inst.name}”`, "success");
+      toast(t("newInstance.created", { name: inst.name }), "success");
       navigate("instance", inst.id, "mods");
     } catch (e) {
       toastError(e);
@@ -42,36 +43,44 @@
 </script>
 
 <Modal onclose={() => (app.newInstanceOpen = false)} width={420}>
-  <h2>Nowa instancja</h2>
+  <h3 class="title">{t("home.newInstance")}</h3>
 
-  <input class="input" placeholder={autoName || "Nazwa"} bind:value={name} maxlength="48" aria-label="Nazwa" />
+  <div class="field">
+    <span class="label">{t("instance.name")}</span>
+    <input class="input" placeholder={autoName} bind:value={name} maxlength="48" aria-label={t("instance.name")} />
+  </div>
 
-  <LoaderPicker bind:mc bind:loader minimal bind:available />
+  <div class="field">
+    <span class="label">{t("loaderPicker.title")}</span>
+    <LoaderPicker bind:mc bind:loader minimal bind:available />
+  </div>
 
-  <select class="input" bind:value={mc} disabled={loader === "rust"} aria-label="Wersja gry">
-    {#if !releases.some((v) => v.id === mc) && mc}<option value={mc}>{mc}</option>{/if}
-    {#each releases as v (v.id)}<option value={v.id}>Minecraft {v.id}</option>{/each}
-  </select>
+  <div class="field">
+    <span class="label">{t("newInstance.version")}</span>
+    <select class="input" bind:value={mc} disabled={loader === "rust"} aria-label={t("newInstance.version")}>
+      {#if !releases.some((v) => v.id === mc) && mc}<option value={mc}>{mc}</option>{/if}
+      {#each releases as v (v.id)}<option value={v.id}>{v.id}</option>{/each}
+    </select>
+  </div>
 
   <div class="actions">
-    <button class="btn ghost" onclick={() => (app.newInstanceOpen = false)}>Anuluj</button>
-    <button class="btn primary" disabled={busy || !mc || !available} onclick={create}>Utwórz</button>
+    <button class="btn ghost" onclick={() => (app.newInstanceOpen = false)}>{t("common.cancel")}</button>
+    <button class="btn primary" disabled={busy || !mc || !available} onclick={create}>{t("common.create")}</button>
   </div>
 </Modal>
 
 <style>
-  h2 {
-    font-size: 1.15rem;
-    margin-bottom: 16px;
-  }
-  .input {
-    width: 100%;
-    margin-bottom: 10px;
+  .title { font-size: var(--fs-16); margin-bottom: 16px; }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
   }
   .actions {
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-    margin-top: 8px;
+    margin-top: 16px;
   }
 </style>

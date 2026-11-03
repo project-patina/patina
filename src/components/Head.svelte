@@ -49,9 +49,9 @@
     display: grid;
     place-items: center;
     flex-shrink: 0;
-    background: var(--accent-soft);
-    border: 1px solid var(--accent-line);
-    font-weight: 700;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    font-weight: 600;
     font-family: var(--font-display);
   }
 </style>

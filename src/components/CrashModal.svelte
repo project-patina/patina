@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { Copy, FolderOpen, SquareTerminal, TriangleAlert } from "@lucide/svelte";
+  import { Copy, FolderOpen, SquareTerminal } from "@lucide/svelte";
   import Modal from "./Modal.svelte";
   import { api } from "../lib/api";
+  import { t } from "../lib/i18n.svelte";
   import { app, navigate, toast, toastError } from "../lib/state.svelte";
 
   const crash = $derived(app.crash!);
@@ -10,42 +11,24 @@
 </script>
 
 <Modal onclose={close} width={680}>
-  <div class="head">
-    <span class="ico"><TriangleAlert size={22} /></span>
-    <div>
-      <h3>Gra „{name}” się wysypała</h3>
-      <p class="dim">Kod wyjścia {crash.code ?? "—"}. Najczęściej winny jest niepasujący mod — sprawdź ostatnie linie logu.</p>
-    </div>
-  </div>
+  <h3>{t("crash.title", { name })}</h3>
+  <p>{t("crash.body", { code: crash.code ?? "—" })}</p>
   <pre class="tail selectable mono">{crash.tail.join("\n")}</pre>
   <div class="actions">
-    <button class="btn" onclick={() => navigator.clipboard?.writeText(crash.tail.join("\n")).then(() => toast("Skopiowano", "success"))}><Copy size={15} /> Kopiuj</button>
-    <button class="btn" onclick={() => api.openFolder(crash.id, "crash-reports").catch(() => api.openFolder(crash.id).catch(toastError))}><FolderOpen size={15} /> Raporty</button>
-    <div style="flex: 1"></div>
-    <button class="btn" onclick={() => { navigate("instance", crash.id, "console"); close(); }}><SquareTerminal size={15} /> Pełna konsola</button>
+    <button class="btn" onclick={() => navigator.clipboard?.writeText(crash.tail.join("\n")).then(() => toast(t("crash.copied"), "success")).catch(toastError)}><Copy size={14} /> {t("common.copy")}</button>
+    <button class="btn" onclick={() => api.openFolder(crash.id, "crash-reports").catch(() => api.openFolder(crash.id).catch(toastError))}><FolderOpen size={14} /> {t("crash.reports")}</button>
+    <button class="btn console" onclick={() => { navigate("instance", crash.id, "console"); close(); }}><SquareTerminal size={14} /> {t("crash.console")}</button>
     <button class="btn primary" onclick={close}>OK</button>
   </div>
 </Modal>
 
 <style>
-  .head {
-    display: flex;
-    gap: 14px;
-    align-items: flex-start;
-  }
-  .ico {
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    display: grid;
-    place-items: center;
-    background: color-mix(in srgb, var(--danger) 15%, transparent);
-    color: var(--danger);
-    flex-shrink: 0;
-  }
-  .head p {
+  h3 { font-size: var(--fs-16); }
+  p {
     margin: 4px 0 0;
-    line-height: 1.45;
+    color: var(--text-2);
+    font-size: var(--fs-13);
+    line-height: 1.5;
   }
   .tail {
     margin: 16px 0;
@@ -55,7 +38,7 @@
     border-radius: var(--radius-s);
     background: var(--bg-2);
     border: 1px solid var(--border);
-    font-size: 0.75rem;
+    font-size: var(--fs-12);
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-all;
@@ -64,6 +47,8 @@
   }
   .actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
   }
+  .console { margin-left: auto; }
 </style>

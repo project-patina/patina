@@ -131,7 +131,7 @@ pub async fn ensure_fresh(ctx: &Ctx, acc: &Account) -> Result<Option<Account>> {
         return Ok(None);
     }
     if acc.ms_refresh_token.is_empty() {
-        bail!("Konto {} wymaga ponownego zalogowania", acc.name);
+        bail!("Konto {} wymaga ponownego zalogowania", "Account {} needs to sign in again", acc.name);
     }
     let tokens = auth::refresh(&ctx.http, &acc.ms_refresh_token).await?;
     let mut fresh = complete_login(ctx, tokens).await?;
@@ -144,7 +144,7 @@ pub async fn ensure_fresh(ctx: &Ctx, acc: &Account) -> Result<Option<Account>> {
 pub async fn skin_data_url(ctx: &Ctx, url: &str) -> Result<String> {
     use base64::Engine;
     if !url.starts_with("https://textures.minecraft.net/") && !url.starts_with("http://textures.minecraft.net/") {
-        bail!("Nieznane źródło skina");
+        bail!("Nieznane źródło skina", "Unknown skin source");
     }
     let name = url.rsplit('/').next().unwrap_or("skin");
     let cache = ctx.paths.root.join("cache/skins").join(format!("{name}.png"));

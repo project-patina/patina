@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::lang::tr;
 use crate::{bail, Error, Result};
 
 pub const CLIENT_ID: &str = "00000000402b5328";
@@ -55,7 +56,7 @@ pub fn code_from_redirect(url: &str) -> Option<Result<String>> {
     }
     match (code, error) {
         (Some(c), _) => Some(Ok(c)),
-        (None, Some(e)) => Some(Err(Error::msg(format!("Microsoft odrzucił logowanie: {e}")))),
+        (None, Some(e)) => Some(Err(Error::msg(crate::tr!("Microsoft odrzucił logowanie: {e}", "Microsoft rejected the sign-in: {e}")))),
         (None, None) => None,
     }
 }
@@ -104,12 +105,12 @@ async fn token_request(http: &reqwest::Client, form: &[(&str, &str)]) -> Result<
     }
     match serde_json::from_slice::<OAuthError>(&body) {
         Ok(e) => Ok(Err(e)),
-        Err(_) => bail!("Microsoft zwrócił błąd {status}"),
+        Err(_) => bail!("Microsoft zwrócił błąd {status}", "Microsoft returned error {status}"),
     }
 }
 
 fn oauth_fail(e: OAuthError) -> Error {
-    Error::msg(format!("Logowanie Microsoft nie powiodło się: {}", e.error_description.unwrap_or(e.error)))
+    Error::msg(crate::tr!("Logowanie Microsoft nie powiodło się: {}", "Microsoft sign-in failed: {}", e.error_description.unwrap_or(e.error)))
 }
 
 pub async fn exchange_code(http: &reqwest::Client, code: &str) -> Result<MsTokens> {
@@ -127,7 +128,7 @@ pub async fn refresh(http: &reqwest::Client, refresh_token: &str) -> Result<MsTo
         &[("client_id", CLIENT_ID), ("refresh_token", refresh_token), ("grant_type", "refresh_token"), ("redirect_uri", REDIRECT_URI), ("scope", SCOPE)],
     )
     .await?
-    .map_err(|e| Error::msg(format!("Sesja Microsoft wygasła — zaloguj się ponownie ({})", e.error_description.unwrap_or(e.error))))
+    .map_err(|e| Error::msg(crate::tr!("Sesja Microsoft wygasła — zaloguj się ponownie ({})", "Microsoft session expired, sign in again ({})", e.error_description.unwrap_or(e.error))))
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +173,7 @@ pub async fn device_code_wait(http: &reqwest::Client, dc: &DeviceCode, cancel: &
             _ = cancel.cancelled() => return Err(Error::Cancelled),
         }
         if std::time::Instant::now() > deadline {
-            bail!("Kod logowania wygasł — spróbuj ponownie");
+            bail!("Kod logowania wygasł — spróbuj ponownie", "The sign-in code expired, try again");
         }
         let res = token_request(
             http,
@@ -237,7 +238,7 @@ async fn xbox_user_token(http: &reqwest::Client, ms_access: &str) -> Result<Stri
         }
         last = r.status().to_string();
     }
-    bail!("Xbox Live odrzucił logowanie ({last})")
+    bail!("Xbox Live odrzucił logowanie ({last})", "Xbox Live rejected the sign-in ({last})")
 }
 
 struct Xsts {
@@ -259,19 +260,16 @@ async fn xsts(http: &reqwest::Client, user_token: &str) -> Result<Xsts> {
         .await?;
     if r.status().as_u16() == 401 {
         let code = r.json::<XErr>().await.map(|e| e.xerr).unwrap_or(0);
-        bail!(
-            "{}",
-            match code {
-                2148916233 => "To konto Microsoft nie ma profilu Xbox. Zaloguj się raz na xbox.com, aby go utworzyć.",
-                2148916235 => "Xbox Live jest niedostępny w Twoim kraju.",
-                2148916236 | 2148916237 => "To konto wymaga weryfikacji wieku na xbox.com.",
-                2148916238 => "To konto dziecka — musi zostać dodane do rodziny Microsoft przez dorosłego.",
-                _ => "Xbox Live odrzucił autoryzację.",
-            }
-        );
+        return Err(Error::msg(match code {
+            2148916233 => tr("To konto Microsoft nie ma profilu Xbox. Zaloguj się raz na xbox.com, aby go utworzyć.", "This Microsoft account has no Xbox profile. Sign in once at xbox.com to create it."),
+            2148916235 => tr("Xbox Live jest niedostępny w Twoim kraju.", "Xbox Live is not available in your country."),
+            2148916236 | 2148916237 => tr("To konto wymaga weryfikacji wieku na xbox.com.", "This account needs age verification at xbox.com."),
+            2148916238 => tr("To konto dziecka — musi zostać dodane do rodziny Microsoft przez dorosłego.", "This is a child account. An adult must add it to a Microsoft family."),
+            _ => tr("Xbox Live odrzucił autoryzację.", "Xbox Live rejected the authorization."),
+        }));
     }
     let x: XblResponse = r.error_for_status()?.json().await?;
-    let xui = x.display_claims.xui.into_iter().next().ok_or_else(|| Error::msg("Brak danych Xbox w odpowiedzi"))?;
+    let xui = x.display_claims.xui.into_iter().next().ok_or_else(|| Error::msg(tr("Brak danych Xbox w odpowiedzi", "The response has no Xbox data")))?;
     Ok(Xsts { token: x.token, uhs: xui.uhs, xuid: xui.xid })
 }
 
@@ -323,12 +321,12 @@ pub async fn minecraft_login(http: &reqwest::Client, ms_access: &str) -> Result<
         .send()
         .await?;
     if !r.status().is_success() {
-        bail!("Serwery Minecraft odrzuciły logowanie ({})", r.status());
+        bail!("Serwery Minecraft odrzuciły logowanie ({})", "Minecraft servers rejected the sign-in ({})", r.status());
     }
     let login: McLogin = r.json().await?;
     let r = http.get("https://api.minecraftservices.com/minecraft/profile").bearer_auth(&login.access_token).send().await?;
     if r.status().as_u16() == 404 {
-        bail!("To konto nie posiada Minecraft: Java Edition.");
+        bail!("To konto nie posiada Minecraft: Java Edition.", "This account does not own Minecraft: Java Edition.");
     }
     let p: McProfile = r.error_for_status()?.json().await?;
     let skin = p.skins.iter().find(|s| s.state == "ACTIVE");

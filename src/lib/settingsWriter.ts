@@ -1,3 +1,12 @@
+/** Backend normalization of `saved`, for the fields not edited since `submitted` was taken. */
+export function adoptSaved<T extends object>(current: T, saved: T, submitted: T): Partial<T> {
+  const adopted: Partial<T> = {};
+  for (const key of Object.keys(saved) as (keyof T)[]) {
+    if (JSON.stringify(current[key]) === JSON.stringify(submitted[key])) adopted[key] = saved[key];
+  }
+  return adopted;
+}
+
 /** Debounced, sequential persistence. Failed changes remain available for retry. */
 export function createSettingsWriter<T>(options: {
   save: (value: T) => Promise<T>;

@@ -16,23 +16,13 @@ fn store(kind: &str) -> Result<Store> {
     match kind {
         "wallpaper" => Ok(Store::Wallpapers),
         "skin" => Ok(Store::Skins),
-        _ => bail!("Nieznany rodzaj obrazu"),
+        _ => bail!("Nieznany rodzaj obrazu", "Unknown image kind"),
     }
 }
 
 #[tauri::command]
 pub fn gear_textures(state: State<'_, AppState>) -> Option<GearTextures> {
     game_textures::load(&state.ctx)
-}
-
-/// How many frames of the home screen's film `scripts/render-backdrop.py` left; 0 for none.
-#[tauri::command]
-pub fn backdrop_frames(state: State<'_, AppState>) -> usize {
-    std::fs::read_dir(state.ctx.paths.backdrop()).map_or(0, |dir| dir.flatten().filter(|e| is_frame(&e.file_name().to_string_lossy())).count())
-}
-
-fn is_frame(name: &str) -> bool {
-    name.strip_suffix(".jpg").is_some_and(|n| n.len() == 5 && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 #[tauri::command]
@@ -56,7 +46,7 @@ pub fn serve(state: &AppState, path: &str) -> Response<Vec<u8>> {
     let path = percent_decode(path);
     let mut parts = path.trim_start_matches('/').splitn(2, '/');
     let (kind, id) = (parts.next().unwrap_or(""), parts.next().unwrap_or(""));
-    let file = if kind == "backdrop" && is_frame(id) { Ok(state.ctx.paths.backdrop().join(id)) } else { store(kind).and_then(|s| wallpapers::path(&state.ctx, s, id)) };
+    let file = store(kind).and_then(|s| wallpapers::path(&state.ctx, s, id));
     match file.ok().and_then(|p| std::fs::read(p).ok()) {
         Some(bytes) => Response::builder()
             .header("Content-Type", wallpapers::mime(id))
@@ -74,7 +64,7 @@ fn percent_decode(s: &str) -> String {
     let mut i = 0;
     while i < b.len() {
         if b[i] == b'%' && i + 2 < b.len() {
-            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+            if let Some(v) = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
                 out.push(v);
                 i += 3;
                 continue;
@@ -91,7 +81,7 @@ fn percent_decode(s: &str) -> String {
 
 async fn with_token(state: &AppState, uuid: &str) -> Result<String> {
     let mut accs = state.accounts.lock().await;
-    let Some(acc) = accs.list.iter().find(|a| a.uuid == uuid).cloned() else { bail!("Nie ma takiego konta") };
+    let Some(acc) = accs.list.iter().find(|a| a.uuid == uuid).cloned() else { bail!("Nie ma takiego konta", "No such account") };
     if let Some(fresh) = accounts::ensure_fresh(&state.ctx, &acc).await? {
         let token = fresh.mc_access_token.clone();
         let active = accs.active.clone();
@@ -134,7 +124,7 @@ pub async fn upload_skin(state: State<'_, AppState>, uuid: String, skin: Option<
     let file = match (skin, path) {
         (Some(id), _) => wallpapers::path(&state.ctx, Store::Skins, &id)?,
         (None, Some(p)) => p,
-        _ => bail!("Wybierz skina"),
+        _ => bail!("Wybierz skina", "Choose a skin"),
     };
     let png = std::fs::read(file)?;
     let token = with_token(&state, &uuid).await?;
@@ -149,7 +139,7 @@ pub async fn set_skin_variant(state: State<'_, AppState>, uuid: String, slim: bo
         let accs = state.accounts.lock().await;
         accs.list.iter().find(|a| a.uuid == uuid).and_then(|a| a.skin_url.clone())
     };
-    let Some(url) = url else { bail!("To konto nie ma własnego skina") };
+    let Some(url) = url else { bail!("To konto nie ma własnego skina", "This account has no skin of its own") };
     let p = profile::set_variant(&state.ctx, &token, &url, slim).await?;
     adopt(&state, &uuid, &p).await
 }

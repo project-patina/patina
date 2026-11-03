@@ -13,9 +13,15 @@ class SourceReleaseSafety(unittest.TestCase):
     def test_rejects_private_paths_even_if_force_added_to_git(self):
         for name in ["accounts.json", "folder/settings.json", ".env", ".env.production",
                      "engine/.local/game.json", "engine/target/client", "public/dev-skin.png",
-                     "runtime/game.jar", "backups/source.tar.gz", "../outside", "/absolute"]:
+                     "runtime/game.jar", "dist-updates/latest.json", "backups/source.tar.gz", "../outside", "/absolute"]:
             with self.subTest(name=name), self.assertRaises(ValueError):
                 release.validate_file(name, b"{}")
+
+    def test_only_the_pinned_gradle_wrapper_may_be_a_jar(self):
+        wrapper = "java-mod/gradle/wrapper/gradle-wrapper.jar"
+        release.validate_file(wrapper, (release.ROOT / wrapper).read_bytes())
+        with self.assertRaises(ValueError):
+            release.validate_file(wrapper, b"another jar")
 
     def test_rejects_tokens_without_disclosing_their_value(self):
         token = "ghp_" + "a" * 36
@@ -32,6 +38,25 @@ class SourceReleaseSafety(unittest.TestCase):
         for name in [".env.example", "LICENSE", "engine/LICENSE", "engine/crates/example/src/main.rs"]:
             release.validate_file(name, b"public source")
         release.validate_file("tests/fixture.rs", b'let key = "-----BEGIN RSA PRIVATE KEY-----\\nAAA=\\n";')
+
+    def test_source_selection_handles_removed_tracked_files(self):
+        import subprocess
+        from unittest.mock import patch
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp:
+            checkout = Path(temp)
+            (checkout / "engine").mkdir()
+            for name in ["LICENSE", "engine/LICENSE", "engine/LICENSE-PATINA"]:
+                (checkout / name).write_bytes((root / name).read_bytes())
+            (checkout / "removed.txt").write_text("old source")
+            subprocess.run(["git", "init", "-q", temp], check=True)
+            subprocess.run(["git", "add", "."], cwd=checkout, check=True)
+            (checkout / "removed.txt").unlink()
+            (checkout / "replacement.md").write_text("replacement")
+            with patch.object(release, "REQUIRED", {"LICENSE", "engine/LICENSE", "engine/LICENSE-PATINA"}):
+                files = release.source_files(checkout)
+            self.assertNotIn("removed.txt", files)
+            self.assertEqual(files["replacement.md"], b"replacement")
 
     def test_export_refuses_to_overwrite_an_existing_directory(self):
         with tempfile.TemporaryDirectory() as temp:

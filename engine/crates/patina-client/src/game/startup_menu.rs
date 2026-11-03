@@ -1,5 +1,5 @@
 //! The interactive title before world resources exist. Uses only the menu
-//! atlas/panorama; transfers the actual screen and queued entry to Game.
+//! atlas; transfers the actual screen and queued entry to Game.
 use super::*;
 use patina_client::{
     clipboard::{self, AppendSelection, SystemClipboard},
@@ -274,6 +274,9 @@ impl Loading {
         if self.loaded.is_none() && !self.delivered {
             loop {
                 match self.receiver.try_recv() {
+                    Ok(LoaderMsg::Ui(gui, root)) if self.splash.is_some() => {
+                        self.held_ui = Some((gui, root));
+                    }
                     Ok(LoaderMsg::Ui(gui, root)) => self.set_ui(gui, root),
                     Ok(LoaderMsg::Done(result)) => {
                         self.loaded = Some(result);
@@ -403,11 +406,6 @@ impl Loading {
                     let _ = std::fs::create_dir_all(&dir);
                     packs::open_folder(&dir);
                 }
-                Event::OpenModFolder => {
-                    let dir = Game::options_path().with_file_name(patina_client::mod_list::DIR);
-                    let _ = std::fs::create_dir_all(&dir);
-                    packs::open_folder(&dir);
-                }
                 Event::ListShaderPacks => {
                     self.settings.shader_packs =
                         patina_client::shader_pack_list::scan(&Game::shader_packs_dir());
@@ -433,11 +431,9 @@ impl Loading {
                         self.menu.win = Some((screen, Instant::now()));
                     }
                 }
-                // Mods' settings pages open only in a running game.
-                Event::NativeSettings(_) | Event::NativeButton(..) => {}
                 // The startup menu runs before the game opens a control socket,
                 // and before its sound engine (no clicks, no volume previews).
-                Event::ButtonClick | Event::CopyAgentDetails | Event::Volume(..) => {}
+                Event::ButtonClick | Event::Volume(..) => {}
             }
         }
     }
@@ -463,6 +459,7 @@ impl Loading {
         match action {
             Action::Quit => event_loop.exit(),
             Action::Options => self.open_menu_options(Page::Main),
+            Action::PatinaClient => self.open_menu_options(Page::Client),
             Action::Accessibility => self.open_menu_options(Page::Accessibility),
             Action::Language => self.open_menu_options(Page::Language),
             Action::DataPacks { dir, selected } => {
@@ -615,9 +612,12 @@ impl Loading {
                 } * self.settings.mouse_wheel_sensitivity;
                 let size = self.menu_size();
                 let batch = HudBatch::new(size);
-                if self.menu.options_open {
+                if self.menu.options_open
+                    && let Some(gui) = &self.gui
+                {
                     let events = self.menu.options.wheel(
                         &mut self.settings,
+                        &gui.atlas,
                         (batch.width, batch.height),
                         self.menu.cursor,
                         [size[0] as i32, size[1] as i32],
@@ -740,10 +740,6 @@ mod tests {
     fn gui(root: &std::path::Path) -> UiResources {
         UiResources {
             atlas: HudAtlas::fonts(root).unwrap(),
-            panorama: Arc::new(patina_client::gfx::panorama::Faces {
-                size: 1,
-                pixels: [96, 110, 111, 255].repeat(6),
-            }),
         }
     }
 
@@ -758,7 +754,7 @@ mod tests {
             vanilla_root: PathBuf::new(),
             pack_error: None,
             started: Instant::now(),
-            panorama_rotation: Default::default(),
+            background_clock: Default::default(),
             progress: Progress::new(),
             receiver,
             loaded: None,
@@ -767,6 +763,10 @@ mod tests {
             shown: false,
             menu: StartupMenu::default(),
             error: None,
+            splash: None,
+            sheet: None,
+            held_ui: None,
+            splash_shots: None,
         }
     }
 

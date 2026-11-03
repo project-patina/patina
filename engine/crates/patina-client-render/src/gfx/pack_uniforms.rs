@@ -405,7 +405,7 @@ impl FrameUniforms {
         self.frame = (self.frame + 1) % 720_720;
     }
 
-    /// `hz_fog_color` and `hz_fog` of the translator's block (the compatibility `gl_Fog`).
+    /// `pt_fog_color` and `pt_fog` of the translator's block (the compatibility `gl_Fog`).
     pub fn fog(&self) -> [Vec4; 2] {
         let get = |name| match index(name).and_then(|i| self.values.get(i)) {
             Some(Value::F(f)) => *f,

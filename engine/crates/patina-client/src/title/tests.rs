@@ -60,8 +60,14 @@ impl Fixture {
             .into_iter()
             .find(|b| b.label == label)
             .unwrap();
-        self.title
-            .click(button.x + button.w / 2.0, button.y + 10.0, (480.0, 262.0))
+        let center = (button.x + button.w / 2.0, button.y + 10.0);
+        // The main screen's buttons are drawn tilted.
+        let (x, y) = if matches!(self.title.mode, Mode::Main) {
+            super::main_menu::Layout::new(480.0, 262.0).plane().apply(center)
+        } else {
+            center
+        };
+        self.title.click(x, y, (480.0, 262.0))
     }
     fn select(&mut self) {
         self.title.enter_singleplayer();
@@ -558,8 +564,8 @@ fn classic_navigation_buttons_sound_even_without_a_game_action() {
         (Action::None, false)
     );
     assert_eq!(
-        f.click_with_sound("Minecraft Realms"),
-        (Action::None, false)
+        f.click_with_sound("Patina Client"),
+        (Action::PatinaClient, true)
     );
     assert_eq!(f.click_with_sound("Singleplayer"), (Action::None, true));
     assert_eq!(
@@ -754,7 +760,12 @@ fn hovered_buttons_ask_for_the_hand_or_not_allowed() {
         let mouse = label.map_or((0.0, 0.0), |label| {
             let buttons = title.buttons(480.0, 262.0);
             let b = buttons.iter().find(|b| b.label == label).unwrap();
-            (b.x + b.w / 2.0, b.y + 10.0)
+            let center = (b.x + b.w / 2.0, b.y + 10.0);
+            if matches!(title.mode, Mode::Main) {
+                super::main_menu::Layout::new(480.0, 262.0).plane().apply(center)
+            } else {
+                center
+            }
         });
         let _ = crate::widgets::take_cursor();
         title.draw(&atlas, &mut HudBatch::new([480, 262]), mouse, true);

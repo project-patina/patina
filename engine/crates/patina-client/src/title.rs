@@ -16,6 +16,7 @@ use std::{
 
 mod create_world;
 mod flat;
+mod main_menu;
 #[cfg(test)]
 mod tests;
 pub mod world_management;
@@ -236,6 +237,8 @@ pub enum Action {
     Options,
     Accessibility,
     Language,
+    /// The Patina Client settings.
+    PatinaClient,
     Play {
         folder: String,
     },
@@ -288,11 +291,16 @@ pub struct Title {
     recent: std::cell::RefCell<Option<(std::time::Instant, Vec<WorldEntry>)>>,
     /// WorldCreationGameRulesScreen, over Create New World while it is open.
     rules: RefCell<Option<RulesScreen>>,
+    /// The main screen's buttons' hover glow.
+    hover: RefCell<main_menu::Hover>,
+    skin: RefCell<main_menu::Skin>,
 }
 pub(crate) struct Button {
     x: f32,
     y: f32,
     w: f32,
+    /// 20, but for the main screen's rows on a short screen.
+    h: f32,
     label: String,
     enabled: bool,
     id: u8,
@@ -455,6 +463,8 @@ impl Title {
             ),
             recent: std::cell::RefCell::new(None),
             rules: RefCell::new(None),
+            hover: Default::default(),
+            skin: Default::default(),
         }
     }
     /// Vanilla bypasses the selector when there are no saves.
@@ -971,6 +981,7 @@ impl Title {
             x,
             y,
             w,
+            h: 20.0,
             label: label.into(),
             enabled,
             id,
@@ -978,53 +989,32 @@ impl Title {
         };
         match &self.mode {
             Mode::Main => {
-                let cx = (w / 2.0).floor();
-                let y = (h / 4.0).floor() + 48.0;
-                let mut buttons = vec![
-                    b(
-                        cx - 100.0,
-                        y,
-                        200.0,
-                        &lang::get_or("menu.singleplayer", "Singleplayer"),
+                // PatinaTitle.arrange: the Realms button's row goes to Patina
+                // Client, every button gets a row of its own, the icons go under.
+                let layout = main_menu::Layout::new(w, h);
+                let mut buttons: Vec<Button> = [
+                    ("menu.singleplayer", "Singleplayer", 1),
+                    ("menu.multiplayer", "Multiplayer", 4),
+                    ("patina.client.title", "Patina Client", 8),
+                    ("menu.options", "Options...", 3),
+                    ("menu.quit", "Quit Game", 2),
+                ]
+                .into_iter()
+                .enumerate()
+                .map(|(row, (key, plain, id))| Button {
+                    h: layout.height,
+                    ..b(
+                        layout.logo_left,
+                        layout.row(row),
+                        layout.width,
+                        &lang::get_or(key, plain),
                         true,
-                        1,
-                    ),
-                    b(
-                        cx - 100.0,
-                        y + 24.0,
-                        200.0,
-                        &lang::get_or("menu.multiplayer", "Multiplayer"),
-                        true,
-                        4,
-                    ),
-                    b(
-                        cx - 100.0,
-                        y + 48.0,
-                        200.0,
-                        &lang::get_or("menu.online", "Minecraft Realms"),
-                        false,
-                        0,
-                    ),
-                    b(
-                        cx - 100.0,
-                        y + 96.0,
-                        98.0,
-                        &lang::get_or("menu.options", "Options..."),
-                        true,
-                        3,
-                    ),
-                    b(
-                        cx + 2.0,
-                        y + 96.0,
-                        98.0,
-                        &lang::get_or("menu.quit", "Quit Game"),
-                        true,
-                        2,
-                    ),
-                ];
-                // CommonButtons' icon buttons; Friends stays in its place, unused.
+                        id,
+                    )
+                })
+                .collect();
+                // CommonButtons' icon buttons, side by side under the column.
                 for (i, (key, plain, id, icon)) in [
-                    ("gui.friends.open", "Friends", 5, "friends/friends"),
                     ("options.language", "Language...", 6, "icon/language"),
                     (
                         "options.accessibility",
@@ -1037,11 +1027,11 @@ impl Title {
                 .enumerate()
                 {
                     let mut button = b(
-                        cx - 34.0 + i as f32 * 24.0,
-                        y + 72.0,
-                        20.0,
+                        layout.icon_x(i),
+                        layout.icon_y(),
+                        main_menu::ICON_SIZE,
                         &lang::get_or(key, plain),
-                        id != 5,
+                        true,
                         id,
                     );
                     button.icon = Some((icon, 15.0));
@@ -1353,61 +1343,7 @@ impl Title {
             return rules.draw(batch, atlas, cursor);
         }
         match &self.mode {
-            Mode::Main => {
-                // LogoRenderer: the logo's top 44 of 64 rows, then the edition
-                // banner's top 14 of 16 rows overlapping its bottom by 7.
-                batch.sprite_region(
-                    atlas,
-                    "gui/title/minecraft",
-                    [(w / 2.0).floor() - 128.0, 30.0, 256.0, 44.0],
-                    256.0,
-                    64.0,
-                );
-                batch.sprite_region(
-                    atlas,
-                    crate::title_edition::SPRITE,
-                    [(w / 2.0).floor() - 64.0, 30.0 + 44.0 - 7.0, 128.0, 14.0],
-                    128.0,
-                    16.0,
-                );
-                if !hide_splash && let Some(splash) = self.splash.as_deref() {
-                    let tw = HudBatch::text_width(atlas, splash);
-                    let start = batch.vertices.len();
-                    batch.text(
-                        atlas,
-                        splash,
-                        -(tw / 2.0).floor(),
-                        -8.0,
-                        rgba(255, 255, 0, 255),
-                        true,
-                    );
-                    let scale = (1.8
-                        - (self.started.elapsed().as_secs_f32() * std::f32::consts::TAU)
-                            .sin()
-                            .abs()
-                            * 0.1)
-                        * 100.0
-                        / (tw + 32.0);
-                    let (sin, cos) = (-20.0f32).to_radians().sin_cos();
-                    for v in &mut batch.vertices[start..] {
-                        let [x, y] = v.pos;
-                        v.pos = [
-                            w / 2.0 + 123.0 + scale * (x * cos - y * sin),
-                            69.0 + scale * (x * sin + y * cos),
-                        ];
-                    }
-                }
-                let version = format!("Patina {} (Rust)", patina_core::VANILLA_VERSION);
-                batch.text(atlas, &version, 2.0, h - 10.0, u32::MAX, true);
-                // A nightly names its build in the top-left corner, the one spot no button reaches at any GUI
-                // scale, so screenshots and reports say which build they come from.
-                if let Some(nightly) = patina_core::release::nightly_label() {
-                    batch.text(atlas, &nightly, 2.0, 2.0, u32::MAX, true);
-                }
-                let notice = "Not affiliated with Mojang or Microsoft";
-                let tw = HudBatch::text_width(atlas, notice);
-                batch.text(atlas, notice, w - tw - 2.0, h - 10.0, u32::MAX, true);
-            }
+            Mode::Main => self.draw_main(atlas, batch, cursor, hide_splash),
             Mode::Select { worlds, selected } => {
                 crate::ui::menu_background(batch, atlas, 0.0, 0.0, w, h, false);
                 centered(
@@ -1467,16 +1403,14 @@ impl Title {
                         );
                         crate::widgets::target_as(rect, crate::widgets::Kind::Row);
                     }
-                    // extractSelection: white once the list has focus.
+                    // extractSelection, in the accent.
                     if *selected == Some(i) {
-                        batch.fill(atlas, x - 2.0, y - 2.0, ROW_WIDTH, ROW_HEIGHT, u32::MAX);
-                        batch.fill(
+                        crate::ui::plate(
+                            batch,
                             atlas,
-                            x - 1.0,
-                            y - 1.0,
-                            ROW_WIDTH - 2.0,
-                            ROW_HEIGHT - 2.0,
-                            rgba(0, 0, 0, 255),
+                            [x - 2.0, y - 2.0, ROW_WIDTH, ROW_HEIGHT],
+                            crate::ui::panel_color(150),
+                            crate::ui::ACCENT,
                         );
                     }
                     batch.text(atlas, &world.name, x + 35.0, y + 1.0, u32::MAX, true);
@@ -1850,7 +1784,13 @@ impl Title {
                 cursor,
             ),
         }
-        for b in self.buttons(w, h) {
+        // The main screen draws its own, tilted.
+        let flat = if matches!(self.mode, Mode::Main) {
+            Vec::new()
+        } else {
+            self.buttons(w, h)
+        };
+        for b in flat {
             crate::widgets::record(&b.label, [b.x, b.y, b.w, 20.0], b.enabled);
             let inside =
                 cursor.0 >= b.x && cursor.0 < b.x + b.w && cursor.1 >= b.y && cursor.1 < b.y + 20.0;
@@ -1863,16 +1803,7 @@ impl Title {
             } else {
                 "gui/sprites/widget/button"
             };
-            // Nine-slice approximation: left and right halves of the 200-wide sprite.
-            if let Some(r) = atlas.sprites.get(sprite).copied() {
-                let half = b.w / 2.0;
-                let mut left = r;
-                left.u1 = r.u0 + (r.u1 - r.u0) * (half / r.w as f32);
-                batch.rect_uv(b.x, b.y, half, 20.0, left, u32::MAX);
-                let mut right = r;
-                right.u0 = r.u1 - (r.u1 - r.u0) * (half / r.w as f32);
-                batch.rect_uv(b.x + half, b.y, half, 20.0, right, u32::MAX);
-            }
+            crate::ui::nine_slice(batch, atlas, sprite, b.x, b.y, b.w, 20.0, u32::MAX);
             let color = if b.enabled {
                 u32::MAX
             } else {
@@ -1956,11 +1887,15 @@ impl Title {
                 return (Action::None, true);
             }
         }
-        let hit = self
-            .buttons(w, h)
-            .into_iter()
-            .find(|b| b.enabled && x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + 20.0)
-            .map(|b| b.id);
+        // The main screen's buttons lie on a turned plane.
+        let hit = if matches!(self.mode, Mode::Main) {
+            self.main_hit(w, h, (x, y))
+        } else {
+            self.buttons(w, h)
+                .into_iter()
+                .find(|b| b.enabled && x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + 20.0)
+                .map(|b| b.id)
+        };
         if matches!(self.mode, Mode::CreateFlat { .. }) {
             self.flat_click(x, y, (w, h), hit);
             return (Action::None, hit.is_some());
@@ -2006,11 +1941,8 @@ impl Title {
                 crate::multiplayer::Outcome::Connect(address) => Action::Connect { address },
                 crate::multiplayer::Outcome::None => Action::None,
             },
-            (Mode::Main, Some(5)) => {
-                self.mode = Mode::Multiplayer(crate::multiplayer::Screen::friend());
-                Action::None
-            }
             (Mode::Main, Some(3)) => Action::Options,
+            (Mode::Main, Some(8)) => Action::PatinaClient,
             (Mode::Main, Some(7)) => Action::Accessibility,
             (Mode::Main, Some(6)) => Action::Language,
             (Mode::Select { worlds, selected }, Some(10)) => {
@@ -2429,13 +2361,6 @@ impl Title {
             };
         }
     }
-    /// The server auto-reconnect retries now, once its countdown is over.
-    pub fn due_retry(&mut self) -> Option<crate::reconnect::Retry> {
-        match &mut self.mode {
-            Mode::Multiplayer(screen) => screen.due_retry(),
-            _ => None,
-        }
-    }
     pub(crate) fn remember_direct_address(&mut self) {
         if let Mode::Multiplayer(crate::multiplayer::Screen::Direct { address }) = &self.mode {
             self.last_server.clone_from(address);
@@ -2555,8 +2480,7 @@ const WORLD_NAME: crate::clipboard::FieldId = ("world.name", 0);
 const WORLD_SEED: crate::clipboard::FieldId = ("world.seed", 0);
 const FLAT_SHARE: crate::clipboard::FieldId = ("world.flat-share", 0);
 /// The focused field of the world screens and the server screens: the list's
-/// search, a world name or seed, or Add Server, Direct Connection and Join a
-/// Friend.
+/// search, a world name or seed, or Add Server and Direct Connection.
 fn caret_field<'a>(
     mode: &'a mut Mode,
     search_focused: bool,
@@ -2589,53 +2513,37 @@ mod classic_tests {
     use super::*;
 
     #[test]
-    fn classic_main_menu_icons_route_language_and_accessibility() {
+    fn the_tilted_buttons_answer_where_they_are_drawn() {
         let mut title = Title::new(
             PathBuf::new(),
             Path::new("/nonexistent/patina-test-resources"),
         );
         for (w, h) in [(960.0, 523.0), (480.0, 320.0), (427.0, 240.0)] {
+            let layout = main_menu::Layout::new(w, h);
+            let tilt = layout.plane();
             let buttons = title.buttons(w, h);
-            let cx = (w / 2.0).floor();
-            let y = (h / 4.0).floor() + 48.0;
-            for (id, x, enabled, icon) in [
-                (5, cx - 34.0, true, "friends/friends"),
-                (6, cx - 10.0, true, "icon/language"),
-                (7, cx + 14.0, true, "icon/accessibility"),
+            assert!(buttons.iter().all(|b| b.id != 0), "Realms is gone");
+            for (id, action) in [
+                (8, Action::PatinaClient),
+                (3, Action::Options),
+                (2, Action::Quit),
+                (6, Action::Language),
+                (7, Action::Accessibility),
             ] {
                 let b = buttons.iter().find(|b| b.id == id).unwrap();
-                assert_eq!(
-                    (b.x, b.y, b.w, b.enabled, b.icon),
-                    (x, y + 72.0, 20.0, enabled, Some((icon, 15.0)))
-                );
-                assert_eq!(
-                    title.click(x + 10.0, y + 82.0, (w, h)),
-                    match id {
-                        6 => (Action::Language, true),
-                        7 => (Action::Accessibility, true),
-                        _ => (Action::None, true),
-                    }
-                );
-                if id == 5 {
-                    assert!(matches!(
-                        title.mode,
-                        Mode::Multiplayer(crate::multiplayer::Screen::Friend { .. })
-                    ));
-                    title.mode = Mode::Main;
+                for point in [
+                    (b.x + 1.0, b.y + 1.0),
+                    (b.x + b.w - 1.0, b.y + 19.0),
+                    (b.x + b.w / 2.0, b.y + 10.0),
+                ] {
+                    let (x, y) = tilt.apply(point);
+                    assert_eq!(title.click(x, y, (w, h)), (action.clone(), true));
                 }
             }
-            for id in [2, 3] {
-                assert_eq!(buttons.iter().find(|b| b.id == id).unwrap().y, y + 96.0);
-            }
-            // The four-pixel gaps around icons must not activate a button.
-            assert_eq!(
-                title.click(cx + 12.0, y + 82.0, (w, h)),
-                (Action::None, false)
-            );
-            assert_eq!(
-                title.click(cx + 24.0, y + 92.0, (w, h)),
-                (Action::None, false)
-            );
+            // The gap between two rows answers nothing.
+            let b = buttons.iter().find(|b| b.id == 8).unwrap();
+            let (x, y) = tilt.apply((b.x + 10.0, b.y + 21.5));
+            assert_eq!(title.click(x, y, (w, h)), (Action::None, false));
         }
     }
 
@@ -2673,83 +2581,24 @@ mod classic_tests {
     }
 
     #[test]
-    fn classic_logo_and_icon_geometry_matches_minecraft() {
+    fn the_splash_text_can_be_hidden() {
         let root = Path::new("/nonexistent/patina-test-resources");
-        let mut atlas = HudAtlas::build(root).unwrap();
-        let r = crate::hud::Rect {
-            u0: 0.0,
-            v0: 0.0,
-            u1: 1.0,
-            v1: 1.0,
-            w: 1024,
-            h: 256,
-        };
-        atlas.sprites.insert("gui/title/minecraft".into(), r);
-        atlas.sprites.insert(
-            "gui/title/edition".into(),
-            crate::hud::Rect { w: 128, h: 16, ..r },
-        );
-        for (i, icon) in ["friends/friends", "icon/language", "icon/accessibility"]
-            .into_iter()
-            .enumerate()
-        {
-            atlas.sprites.insert(
-                format!("gui/sprites/{icon}"),
-                crate::hud::Rect {
-                    u0: 0.25 + i as f32 * 0.125,
-                    w: 15,
-                    h: 15,
-                    ..r
-                },
-            );
-        }
+        let atlas = HudAtlas::build(root).unwrap();
         let mut title = Title::new(PathBuf::new(), root);
-        title.splash = Some("Visible splash!".into());
-        let mut batch = HudBatch::new([1920, 1080]);
-        title.draw(&atlas, &mut batch, (0.0, 0.0), false);
-        let cx = (batch.width / 2.0).floor();
-        assert_eq!(batch.vertices[0].pos, [cx - 128.0, 30.0]);
-        assert_eq!(batch.vertices[2].pos, [cx + 128.0, 74.0]);
-        assert_eq!(batch.vertices[2].uv, [1.0, 44.0 / 64.0]);
-        assert_eq!(batch.vertices[6].pos, [cx - 64.0, 67.0]);
-        assert_eq!(batch.vertices[8].pos, [cx + 64.0, 81.0]);
-        assert_eq!(batch.vertices[8].uv, [1.0, 14.0 / 16.0]);
-        for i in 0..3 {
-            let quad = batch
+        let yellow = rgba(255, 255, 0, 255);
+        let drawn = |title: &Title, hide: bool| {
+            let mut batch = HudBatch::new([1920, 1080]);
+            title.draw(&atlas, &mut batch, (0.0, 0.0), hide);
+            // Whatever the fade in has reached.
+            batch
                 .vertices
-                .as_chunks::<6>()
-                .0
                 .iter()
-                .find(|quad| quad[0].uv == [0.25 + i as f32 * 0.125, 0.0])
-                .unwrap();
-            let x = cx - 34.0 + i as f32 * 24.0 + 3.0;
-            let y = (batch.height / 4.0).floor() + 48.0 + 72.0 + 3.0;
-            assert_eq!(quad[0].pos, [x, y]);
-            assert_eq!(quad[2].pos, [x + 15.0, y + 15.0]);
-            assert!(quad.iter().all(|v| v.color == u32::MAX));
-        }
-        assert!(
-            batch.vertices[12..]
-                .iter()
-                .any(|v| v.color == rgba(255, 255, 0, 255))
-        );
-        let settings = crate::settings::Settings::parse("hideSplashTexts:true\n");
-        for (hide_splash, splash) in [
-            (
-                settings.file.bool("hideSplashTexts"),
-                Some("Hidden splash!".into()),
-            ),
-            (false, None),
-        ] {
-            title.splash = splash;
-            let mut hidden = HudBatch::new([1920, 1080]);
-            title.draw(&atlas, &mut hidden, (0.0, 0.0), hide_splash);
-            assert!(
-                !hidden
-                    .vertices
-                    .iter()
-                    .any(|v| v.color == rgba(255, 255, 0, 255))
-            );
-        }
+                .any(|v| v.color & 0x00ff_ffff == yellow & 0x00ff_ffff)
+        };
+        title.splash = Some("Visible splash!".into());
+        assert!(drawn(&title, false));
+        assert!(!drawn(&title, true));
+        title.splash = None;
+        assert!(!drawn(&title, false));
     }
 }

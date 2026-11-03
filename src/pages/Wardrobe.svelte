@@ -1,14 +1,18 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
   import { untrack } from "svelte";
-  import { fly } from "svelte/transition";
-  import { Ban, Check, LoaderCircle, Plus, RefreshCw, Shirt, Trash2, Upload } from "@lucide/svelte";
+  import { Ban, Check, LoaderCircle, Plus, RefreshCw, Trash2, Upload } from "@lucide/svelte";
   import SkinViewer from "../components/SkinViewer.svelte";
   import CapeThumb from "../components/CapeThumb.svelte";
+  import Group from "../components/Group.svelte";
   import Head from "../components/Head.svelte";
+  import Row from "../components/Row.svelte";
+  import Segmented from "../components/Segmented.svelte";
   import { api, errText, mediaUrl } from "../lib/api";
-  import { activeAccount, app, dur, loadSkin, toast, toastError, updateSettings } from "../lib/state.svelte";
-    import type { Image, McProfile } from "../lib/types";
+  import { t } from "../lib/i18n.svelte";
+  import { reveal } from "../lib/motion";
+  import { activeAccount, app, loadSkin, toast, toastError } from "../lib/state.svelte";
+  import type { Image, McProfile } from "../lib/types";
 
   const acc = $derived(activeAccount());
   let profile = $state<McProfile | null>(null);
@@ -17,13 +21,14 @@
   let library = $state<Image[]>([]);
   let libData = $state<Record<string, string>>({});
   let capeData = $state<Record<string, string>>({});
-  let busy = $state(false);
+  let busy = $state<"skin" | "cape" | null>(null);
 
   // Preview selection (not applied until the player confirms).
   let previewSkin = $state<string | null>(null); // library id, or null = current skin
   let previewCape = $state<string | null | undefined>(undefined); // cape id, null = none, undefined = current
   let slim = $state(false);
 
+  const models = $derived([{ value: "classic" as const, label: t("wardrobe.classic") }, { value: "slim" as const, label: t("wardrobe.slim") }]);
 
   async function toDataUrl(url: string): Promise<string> {
     const blob = await (await fetch(url)).blob();
@@ -37,10 +42,14 @@
 
   async function loadProfile() {
     if (!acc) return;
+    const uuid = acc.uuid;
     loadingProfile = true;
     profileError = "";
     try {
-      profile = await api.getProfile(acc.uuid);
+      const loaded = await api.getProfile(uuid);
+      // The player may have switched accounts while this was on its way.
+      if (uuid !== acc?.uuid) return;
+      profile = loaded;
       app.accounts = await api.listAccounts();
       slim = activeAccount()?.skinSlim ?? false;
       for (const c of profile.capes) {
@@ -49,7 +58,7 @@
       const a = activeAccount();
       if (a) await loadSkin(a);
     } catch (e) {
-      profileError = errText(e);
+      if (uuid === acc?.uuid) profileError = errText(e);
     } finally {
       loadingProfile = false;
     }
@@ -92,36 +101,36 @@
 
   async function applyCape() {
     if (!acc) return;
-    busy = true;
+    busy = "cape";
     try {
       app.accounts = await api.setCape(acc.uuid, previewCape ?? null);
       await loadProfile();
       previewCape = undefined;
-      toast(shownCapeId ? "Peleryna założona — w grze zobaczysz ją po ponownym wejściu" : "Peleryna zdjęta", "success", 6000);
+      toast(t(shownCapeId ? "wardrobe.capeOn" : "wardrobe.capeOff"), "success", 6000);
     } catch (e) {
       toastError(e);
     } finally {
-      busy = false;
+      busy = null;
     }
   }
 
   async function applySkin() {
     if (!acc) return;
-    busy = true;
+    busy = "skin";
     try {
       app.accounts = previewSkin ? await api.uploadSkin(acc.uuid, previewSkin, null, slim) : await api.setSkinVariant(acc.uuid, slim);
       await loadProfile();
       previewSkin = null;
-      toast("Skin zmieniony", "success");
+      toast(t("wardrobe.skinChanged"), "success");
     } catch (e) {
       toastError(e);
     } finally {
-      busy = false;
+      busy = null;
     }
   }
 
   async function addSkins() {
-    const picked = await open({ multiple: true, title: "Wybierz skin (PNG 64×64)", filters: [{ name: "Skin", extensions: ["png"] }] });
+    const picked = await open({ multiple: true, title: t("wardrobe.pickSkin"), filters: [{ name: t("wardrobe.skin"), extensions: ["png"] }] });
     const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
     let last: string | null = null;
     for (const p of paths) {
@@ -142,283 +151,213 @@
   }
 </script>
 
-<div class="page">
-  <h1>Garderoba</h1>
+<div class="view">
+  <h1 class="page-title">{t("nav.wardrobe")}</h1>
   {#if !acc}
-    <p class="dim">Zaloguj się, aby zmieniać skin i peleryny.</p>
+    <p class="hint">{t("wardrobe.signIn")}</p>
   {:else}
     <div class="grid">
-      <section class="stage card" style:--stage="var(--accent)">
-        <div class="glow"></div>
+      <section class="stage card" in:reveal|global>
         {#if shownSkin}
-          <SkinViewer skin={shownSkin} cape={shownCape} {slim} width={300} height={420} zoom={0.78} />
+          <SkinViewer skin={shownSkin} cape={shownCape} {slim} width={256} height={372} zoom={0.78} />
         {:else}
-          <div class="noskin"><Head name={acc.name} size={96} radius={22} /><p class="dim">Domyślny skin (Steve/Alex)</p></div>
+          <div class="noskin"><Head name={acc.name} size={72} radius={8} /><p class="hint">{t("wardrobe.defaultSkin")}</p></div>
         {/if}
-        <p class="hint dim">Przeciągnij, aby obrócić</p>
+        <p class="hint">{t("wardrobe.dragHint")}</p>
       </section>
 
       <div class="side">
-        <section class="card block" in:fly={{ y: 10, duration: dur(300) }}>
-          <div class="sec-head">
-            <h3><Shirt size={17} /> Skin</h3>
-            <div class="seg">
-              <button class:on={!slim} onclick={() => (slim = false)}>Klasyczny</button>
-              <button class:on={slim} onclick={() => (slim = true)}>Smukły</button>
-            </div>
-          </div>
-          <div class="skins">
-            <button class="skin" class:on={previewSkin === null} onclick={() => (previewSkin = null)} title="Obecny skin">
-              <Head skinUrl={acc.skinUrl} name={acc.name} size={44} radius={8} />
-              <small>Obecny</small>
-            </button>
-            {#each library as s (s.id)}
-              <div class="skin" class:on={previewSkin === s.id}>
-                <button class="hit" onclick={() => (previewSkin = s.id)} title={s.name} aria-label={s.name}></button>
-                <Head src={libData[s.id] ?? null} name={s.name} size={44} radius={8} />
-                <small>{s.name.replace(/\.png$/i, "").slice(0, 10) || "Skin"}</small>
-                <button class="del" onclick={() => removeSkin(s.id)} aria-label="Usuń"><Trash2 size={11} /></button>
-              </div>
-            {/each}
-            <button class="skin add" onclick={addSkins}><Plus size={20} /><small>Dodaj</small></button>
-          </div>
-          <div class="actions">
-            <span class="dim small">Zmiana skina działa od razu na serwerach i w grze.</span>
-            <button class="btn primary" disabled={!skinChanged || busy} onclick={applySkin}>
-              {#if busy}<LoaderCircle size={15} class="spin" />{:else}<Upload size={15} />{/if} Ustaw skin
-            </button>
-          </div>
-        </section>
-
-        <section class="card block" in:fly={{ y: 10, duration: dur(300), delay: dur(60) }}>
-          <div class="sec-head">
-            <h3>Peleryny</h3>
-            <button class="btn ghost sm" onclick={loadProfile} disabled={loadingProfile}><RefreshCw size={14} class={loadingProfile ? "spin" : ""} /></button>
-          </div>
-          {#if profileError}
-            <p class="err">{profileError}</p>
-          {:else if !profile}
-            <div class="center"><LoaderCircle size={20} class="spin" /></div>
-          {:else}
-            <div class="capes">
-              <button class="cape" class:on={shownCapeId === null} onclick={() => (previewCape = null)}>
-                <span class="none"><Ban size={22} /></span>
-                <small>Bez peleryny</small>
+        <div in:reveal|global={{ index: 1 }}>
+          <Group title={t("wardrobe.skin")}>
+            <Row title={t("wardrobe.model")}>
+              <Segmented label={t("wardrobe.model")} value={slim ? "slim" : "classic"} options={models} onchange={(v) => (slim = v === "slim")} />
+            </Row>
+            <div class="thumbs">
+              <button class="thumb" aria-pressed={previewSkin === null} onclick={() => (previewSkin = null)} title={t("wardrobe.current")}>
+                <Head skinUrl={acc.skinUrl} name={acc.name} size={40} radius={6} />
+                <small>{t("wardrobe.current")}</small>
               </button>
-              {#each profile.capes as c (c.id)}
-                <button class="cape" class:on={shownCapeId === c.id} onclick={() => (previewCape = c.id)}>
-                  {#if capeData[c.id]}<CapeThumb src={capeData[c.id]} width={40} />{:else}<span class="none"><LoaderCircle size={16} class="spin" /></span>{/if}
-                  <small>{c.alias ?? "Peleryna"}</small>
-                  {#if c.state === "ACTIVE"}<span class="tick"><Check size={11} /></span>{/if}
-                </button>
+              {#each library as s (s.id)}
+                <div class="thumb" class:on={previewSkin === s.id}>
+                  <button class="hit" aria-pressed={previewSkin === s.id} onclick={() => (previewSkin = s.id)} title={s.name} aria-label={s.name}></button>
+                  <Head src={libData[s.id] ?? null} name={s.name} size={40} radius={6} />
+                  <small>{s.name.replace(/\.png$/i, "") || t("wardrobe.skin")}</small>
+                  <button class="del" onclick={() => removeSkin(s.id)} title={t("common.delete")} aria-label={t("common.delete")}><Trash2 size={12} /></button>
+                </div>
               {/each}
+              <button class="thumb add" onclick={addSkins}><Plus size={16} /><small>{t("common.add")}</small></button>
             </div>
-            {#if profile.capes.length === 0}
-              <p class="dim small">To konto nie ma żadnych peleryn (dostaje się je np. za Minecon, migrację konta czy wydarzenia).</p>
+            <div class="actions">
+              <span class="hint">{t("wardrobe.skinHint")}</span>
+              <button class="btn primary" disabled={!skinChanged || !!busy} onclick={applySkin}>
+                {#if busy === "skin"}<LoaderCircle size={14} class="spin" />{:else}<Upload size={14} />{/if} {t("wardrobe.applySkin")}
+              </button>
+            </div>
+          </Group>
+        </div>
+
+        <div in:reveal|global={{ index: 2 }}>
+          <Group title={t("wardrobe.capes")}>
+            {#if profileError}
+              <p class="err selectable">{profileError}</p>
+            {:else if !profile}
+              <div class="center"><LoaderCircle size={16} class="spin" /></div>
+            {:else}
+              <div class="thumbs">
+                <button class="thumb" aria-pressed={shownCapeId === null} onclick={() => (previewCape = null)}>
+                  <span class="none"><Ban size={16} /></span>
+                  <small>{t("wardrobe.noCape")}</small>
+                </button>
+                {#each profile.capes as c (c.id)}
+                  <button class="thumb" aria-pressed={shownCapeId === c.id} onclick={() => (previewCape = c.id)} title={c.alias ?? t("wardrobe.cape")}>
+                    {#if capeData[c.id]}<CapeThumb src={capeData[c.id]} width={32} />{:else}<span class="none"><LoaderCircle size={14} class="spin" /></span>{/if}
+                    <small>{c.alias ?? t("wardrobe.cape")}</small>
+                    {#if c.state === "ACTIVE"}<span class="tick" title={t("wardrobe.wearing")}><Check size={12} /></span>{/if}
+                  </button>
+                {/each}
+              </div>
+              {#if profile.capes.length === 0}
+                <p class="hint">{t("wardrobe.noCapes")}</p>
+              {/if}
             {/if}
             <div class="actions">
-              <span></span>
-              <button class="btn primary" disabled={!capeChanged || busy} onclick={applyCape}>{#if busy}<LoaderCircle size={15} class="spin" />{/if} Załóż</button>
+              <button class="btn ghost" onclick={loadProfile} disabled={loadingProfile}><RefreshCw size={14} class={loadingProfile ? "spin" : ""} /> {t("common.refresh")}</button>
+              {#if profile && !profileError}
+                <button class="btn primary" disabled={!capeChanged || !!busy} onclick={applyCape}>{#if busy === "cape"}<LoaderCircle size={14} class="spin" />{/if} {t("wardrobe.applyCape")}</button>
+              {/if}
             </div>
-          {/if}
-        </section>
+          </Group>
+        </div>
       </div>
     </div>
   {/if}
 </div>
 
 <style>
-  .page {
+  .view {
     height: 100%;
     overflow: auto;
-    padding: 6px 22px 22px 6px;
+    padding: var(--page-pad);
   }
-  h1 {
-    font-size: 1.65rem;
-    font-weight: 700;
-    margin: 4px 0 14px;
-  }
+  .page-title { margin-bottom: 16px; }
   .grid {
     display: grid;
-    grid-template-columns: 360px minmax(0, 1fr);
-    gap: 16px;
+    grid-template-columns: 288px minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
   }
   .stage {
-    position: relative;
-    overflow: hidden;
+    position: sticky;
+    top: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 18px 12px 14px;
-    min-height: 520px;
-  }
-  .glow {
-    position: absolute;
-    left: 50%;
-    top: 45%;
-    width: 340px;
-    height: 340px;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 30%, transparent), transparent);
-    pointer-events: none;
-  }
-  .stage :global(canvas) {
-    position: relative;
+    padding: 12px;
   }
   .noskin {
-    flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 8px;
+    height: 372px;
   }
   .hint {
-    font-size: 0.76rem;
-    margin: 10px 0 0;
+    margin: 0;
+    color: var(--text-3);
+    font-size: var(--fs-12);
+    line-height: 1.4;
   }
   .side {
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 24px;
   }
-  .block {
-    padding: 16px 18px;
-  }
-  .sec-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-  }
-  h3 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 1.05rem;
-  }
-  .seg {
-    display: flex;
-    padding: 3px;
-    border-radius: 10px;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-  }
-  .seg button {
-    padding: 5px 11px;
-    border-radius: 7px;
-    font-weight: 600;
-    font-size: 0.84rem;
-    color: var(--text-2);
-  }
-  .seg button.on {
-    background: var(--panel-3);
-    color: var(--text);
-  }
-  .skins,
-  .capes {
+  .thumbs {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
     gap: 8px;
+    padding: 12px 0;
   }
-  .skin,
-  .cape {
+  .thumb {
     position: relative;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    padding: 10px 6px 8px;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 4px;
     border-radius: var(--radius);
-    background: var(--panel-2);
-    border: 2px solid transparent;
-    transition: border-color 0.15s, transform 0.2s var(--ease);
+    border: 1px solid var(--border);
+    transition: border-color 0.12s;
   }
-  .skin:hover,
-  .cape:hover {
-    transform: translateY(-2px);
-  }
-  .skin.on,
-  .cape.on {
-    border-color: var(--accent);
-  }
-  .skin small,
-  .cape small {
-    font-size: 0.72rem;
+  .thumb:hover { border-color: var(--border-2); }
+  .thumb[aria-pressed="true"], .thumb.on { border-color: var(--accent); }
+  .thumb small {
+    max-width: 100%;
     color: var(--text-2);
-    text-align: center;
-    line-height: 1.2;
+    font-size: var(--fs-12);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .hit {
     position: absolute;
     inset: 0;
+    border-radius: inherit;
   }
-  .add {
-    border: 1px dashed var(--border-2);
-    color: var(--text-3);
-    justify-content: center;
-  }
-  .add:hover {
-    color: var(--accent);
-  }
+  .add { border-style: dashed; color: var(--text-3); }
+  .add:hover { color: var(--text); }
   .del {
     position: absolute;
     top: 4px;
     right: 4px;
     width: 20px;
     height: 20px;
-    border-radius: 5px;
     display: grid;
     place-items: center;
-    background: rgb(0 0 0 / 0.5);
-    color: white;
+    border-radius: 4px;
+    color: var(--text-2);
+    background: var(--panel-3);
     opacity: 0;
+    transition: opacity 0.12s;
   }
-  .skin:hover .del {
-    opacity: 1;
-  }
+  .thumb:hover .del, .del:focus-visible { opacity: 1; }
   .none {
-    width: 40px;
-    height: 64px;
+    width: 32px;
+    height: 51px;
     display: grid;
     place-items: center;
     color: var(--text-3);
   }
   .tick {
     position: absolute;
-    top: 5px;
-    right: 5px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--success);
-    color: white;
+    top: 4px;
+    right: 4px;
     display: grid;
-    place-items: center;
+    color: var(--text-2);
   }
   .actions {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 12px;
-    margin-top: 14px;
-  }
-  .small {
-    font-size: 0.8rem;
+    justify-content: space-between;
+    gap: 16px;
   }
   .err {
+    margin: 12px 0;
     color: var(--danger);
-    font-size: 0.88rem;
+    font-size: var(--fs-13);
   }
   .center {
     display: grid;
     place-items: center;
-    padding: 20px;
+    padding: 16px;
+    color: var(--text-3);
   }
-  @media (max-width: 1000px) {
-    .grid {
-      grid-template-columns: 1fr;
-    }
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: minmax(0, 1fr); }
+    .stage { position: static; }
   }
 </style>

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSettingsWriter } from '../src/lib/settingsWriter.ts';
+import { adoptSaved, createSettingsWriter } from '../src/lib/settingsWriter.ts';
 
 const deferred = () => {
   let resolve;
@@ -70,4 +70,11 @@ test('a failed old write never replaces a newer pending snapshot', async () => {
   await assert.rejects(saving);
   await writer.flush();
   assert.deepEqual(writes, [{ theme: 'ocean' }, { theme: 'forest' }]);
+});
+
+test('a slow save never overwrites a field edited after it was submitted', () => {
+  const submitted = { uiScale: 3, accent: '#111111', engine: { hdr: null } };
+  const saved = { uiScale: 1.25, accent: '#111111', engine: { hdr: null } };
+  const current = { uiScale: 3, accent: '#222222', engine: { hdr: true } };
+  assert.deepEqual(adoptSaved(current, saved, submitted), { uiScale: 1.25 });
 });

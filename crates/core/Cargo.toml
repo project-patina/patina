@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "io-util", "sync", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "process", "io-util", "net", "sync", "time"] }
 tokio-util = "0.7"
 reqwest = { version = "0.13", default-features = false, features = ["default-tls", "charset", "http2", "json", "form", "query", "stream", "gzip", "multipart"] }
 futures = "0.3"
@@ -25,6 +25,11 @@ sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 trash = "5"
 log = "0.4"
 libc = "0.2"
+sha2 = "0.11"
+semver = "1"
+minisign-verify = "0.3"
+self-replace = "1"
 
 [dev-dependencies]
 env_logger = "0.11"
+minisign = "0.10"

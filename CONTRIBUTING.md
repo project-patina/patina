@@ -43,7 +43,7 @@ is not a substitute for understanding its source or license.
 Contributions of your original code and artwork are offered under this project's
 MIT license unless explicitly agreed otherwise. Only submit work you have the
 right to contribute. Preserve existing copyrights and third-party notices.
-Horizon-derived code keeps its original MIT attribution; Patina's added notice
+Code inherited in `engine/` keeps its original MIT attribution; Patina's added notice
 covers Patina contributions. Record the upstream repository and revision when
 importing future changes. Do not submit game files, decompiled game source,
 extracted textures, private skins/capes or downloaded modpacks.

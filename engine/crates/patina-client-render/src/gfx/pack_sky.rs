@@ -58,41 +58,41 @@ pub(super) const ATTRIBUTES: [wgpu::VertexAttribute; 2] =
 /// What `gbuffers_skybasic` reads from these vertices.
 pub fn inputs() -> patina_shaders::GbuffersInputs {
     let declarations =
-        "layout(location = 0) in vec3 hz_v_pos;\nlayout(location = 1) in uint hz_v_kind;\n\
-         layout(set = 1, binding = 0) uniform HzSky { mat4 hz_sky_stars; vec4 hz_sky_color; \
-         vec4 hz_sky_sunrise; vec4 hz_sky_sun; };\n"
+        "layout(location = 0) in vec3 pt_v_pos;\nlayout(location = 1) in uint pt_v_kind;\n\
+         layout(set = 1, binding = 0) uniform PtSky { mat4 pt_sky_stars; vec4 pt_sky_color; \
+         vec4 pt_sky_sunrise; vec4 pt_sky_sun; };\n"
             .to_owned();
     let body = format!(
-        "    vec3 hz_p = hz_v_pos;\n    \
-         hz_Color = hz_sky_color;\n    \
-         if (hz_v_kind == {SUNSET_APEX}u || hz_v_kind == {SUNSET_RIM}u) {{\n        \
-             vec3 hz_l = vec3(0.0, 100.0, 0.0);\n        \
-             hz_Color = hz_sky_sunrise;\n        \
-             if (hz_v_kind == {SUNSET_RIM}u) {{\n            \
-                 hz_l = vec3(hz_v_pos.xy * 120.0, -hz_v_pos.y * 40.0 * hz_sky_sunrise.a);\n            \
-                 hz_Color.a = 0.0;\n        \
+        "    vec3 pt_p = pt_v_pos;\n    \
+         pt_Color = pt_sky_color;\n    \
+         if (pt_v_kind == {SUNSET_APEX}u || pt_v_kind == {SUNSET_RIM}u) {{\n        \
+             vec3 pt_l = vec3(0.0, 100.0, 0.0);\n        \
+             pt_Color = pt_sky_sunrise;\n        \
+             if (pt_v_kind == {SUNSET_RIM}u) {{\n            \
+                 pt_l = vec3(pt_v_pos.xy * 120.0, -pt_v_pos.y * 40.0 * pt_sky_sunrise.a);\n            \
+                 pt_Color.a = 0.0;\n        \
              }}\n        \
-             vec3 hz_r = vec3(hz_l.x * hz_sky_sun.x - hz_l.y * hz_sky_sun.y, hz_l.x * hz_sky_sun.y + hz_l.y * hz_sky_sun.x, hz_l.z);\n        \
-             hz_p = vec3(hz_r.x, -hz_r.z, hz_r.y);\n    \
-         }} else if (hz_v_kind == {STAR}u) {{\n        \
-             hz_p = (hz_sky_stars * vec4(hz_v_pos, 1.0)).xyz;\n        \
-             hz_Color = vec4(hz_sky_sun.z);\n    \
-         }} else if (hz_v_kind == {VOID}u) {{\n        \
-             hz_Color = vec4(0.0, 0.0, 0.0, 1.0);\n    \
+             vec3 pt_r = vec3(pt_l.x * pt_sky_sun.x - pt_l.y * pt_sky_sun.y, pt_l.x * pt_sky_sun.y + pt_l.y * pt_sky_sun.x, pt_l.z);\n        \
+             pt_p = vec3(pt_r.x, -pt_r.z, pt_r.y);\n    \
+         }} else if (pt_v_kind == {STAR}u) {{\n        \
+             pt_p = (pt_sky_stars * vec4(pt_v_pos, 1.0)).xyz;\n        \
+             pt_Color = vec4(pt_sky_sun.z);\n    \
+         }} else if (pt_v_kind == {VOID}u) {{\n        \
+             pt_Color = vec4(0.0, 0.0, 0.0, 1.0);\n    \
          }}\n    \
-         hz_Vertex = vec4(hz_p, 1.0);\n    \
-         hz_MultiTexCoord0 = vec4(0.0, 0.0, 0.0, 1.0);\n    \
-         hz_MultiTexCoord1 = vec4(0.0, 240.0, 0.0, 1.0);\n    \
-         hz_MultiTexCoord2 = hz_MultiTexCoord1;\n    \
-         hz_Normal = vec3(0.0, 1.0, 0.0);\n"
+         pt_Vertex = vec4(pt_p, 1.0);\n    \
+         pt_MultiTexCoord0 = vec4(0.0, 0.0, 0.0, 1.0);\n    \
+         pt_MultiTexCoord1 = vec4(0.0, 240.0, 0.0, 1.0);\n    \
+         pt_MultiTexCoord2 = pt_MultiTexCoord1;\n    \
+         pt_Normal = vec3(0.0, 1.0, 0.0);\n"
     );
     patina_shaders::GbuffersInputs {
         declarations,
         body,
         attributes: vec![
-            ("vaPosition".into(), "hz_Vertex.xyz".into()),
-            ("vaColor".into(), "hz_Color".into()),
-            ("vaNormal".into(), "hz_Normal".into()),
+            ("vaPosition".into(), "pt_Vertex.xyz".into()),
+            ("vaColor".into(), "pt_Color".into()),
+            ("vaNormal".into(), "pt_Normal".into()),
         ],
         // At the far plane: the sky shows only where nothing else drew, and it writes no depth.
         after: "    gl_Position.z = gl_Position.w;\n".into(),
@@ -104,21 +104,21 @@ pub fn inputs() -> patina_shaders::GbuffersInputs {
 pub fn celestial_inputs() -> patina_shaders::GbuffersInputs {
     patina_shaders::GbuffersInputs {
         declarations:
-            "layout(location = 0) in vec3 hz_v_pos;\nlayout(location = 1) in vec2 hz_v_uv;\n\
-             layout(location = 2) in vec4 hz_v_color;\n"
+            "layout(location = 0) in vec3 pt_v_pos;\nlayout(location = 1) in vec2 pt_v_uv;\n\
+             layout(location = 2) in vec4 pt_v_color;\n"
                 .into(),
-        body: "    hz_Vertex = vec4(hz_v_pos, 1.0);\n    \
-             hz_MultiTexCoord0 = vec4(hz_v_uv, 0.0, 1.0);\n    \
-             hz_MultiTexCoord1 = vec4(0.0, 240.0, 0.0, 1.0);\n    \
-             hz_MultiTexCoord2 = hz_MultiTexCoord1;\n    \
-             hz_Color = hz_v_color;\n    \
-             hz_Normal = vec3(0.0, 0.0, 1.0);\n"
+        body: "    pt_Vertex = vec4(pt_v_pos, 1.0);\n    \
+             pt_MultiTexCoord0 = vec4(pt_v_uv, 0.0, 1.0);\n    \
+             pt_MultiTexCoord1 = vec4(0.0, 240.0, 0.0, 1.0);\n    \
+             pt_MultiTexCoord2 = pt_MultiTexCoord1;\n    \
+             pt_Color = pt_v_color;\n    \
+             pt_Normal = vec3(0.0, 0.0, 1.0);\n"
             .into(),
         attributes: vec![
-            ("vaPosition".into(), "hz_Vertex.xyz".into()),
-            ("vaUV0".into(), "hz_v_uv".into()),
-            ("vaColor".into(), "hz_Color".into()),
-            ("vaNormal".into(), "hz_Normal".into()),
+            ("vaPosition".into(), "pt_Vertex.xyz".into()),
+            ("vaUV0".into(), "pt_v_uv".into()),
+            ("vaColor".into(), "pt_Color".into()),
+            ("vaNormal".into(), "pt_Normal".into()),
         ],
         after: "    gl_Position.z = gl_Position.w;\n".into(),
         alpha_test: None,

@@ -927,7 +927,7 @@ fn build_pass(
     let missing: Vec<&str> = interface
         .uniforms
         .iter()
-        .filter(|u| !u.name.starts_with("hz_") && index(&u.name).is_none())
+        .filter(|u| !u.name.starts_with("pt_") && index(&u.name).is_none())
         .map(|u| u.name.as_str())
         .collect();
     if !missing.is_empty() {
@@ -1507,7 +1507,7 @@ impl PackPost {
         out: [u32; 2],
     ) -> wgpu::BindGroup {
         let fog = self.uniforms.fog();
-        // Our block members first (`hz_target`, `hz_fog_color`, `hz_fog`), then the pack's.
+        // Our block members first (`pt_target`, `pt_fog_color`, `pt_fog`), then the pack's.
         let ours = [
             [
                 out[0] as f32,

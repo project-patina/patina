@@ -1,6 +1,6 @@
 //! Patina's own shader packs (docs/api/shaders.md): WGSL written against
 //! the renderer's stages, described by `patina-shaders.toml` and shipped as
-//! a folder or a `.hshader`. This crate reads and checks packs; the game, the
+//! a folder or a `.pshader`. This crate reads and checks packs; the game, the
 //! launcher and the registry all use it, so a pack is judged the same way
 //! everywhere.
 pub mod check;

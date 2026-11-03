@@ -1,20 +1,31 @@
 <script lang="ts">
-  import { fly } from "svelte/transition";
-  import { Check, Download, Heart, LoaderCircle, Search } from "@lucide/svelte";
+  import { onDestroy } from "svelte";
+  import { Check, Download, Heart, LoaderCircle } from "@lucide/svelte";
+  import Option from "../components/Option.svelte";
+  import SearchInput from "../components/SearchInput.svelte";
+  import Segmented from "../components/Segmented.svelte";
+  import Select from "../components/Select.svelte";
   import { api, errText } from "../lib/api";
+  import { CATEGORIES, categoryLabel } from "../lib/categories";
   import { compact, kindLabel, loaderLabel, relativeTime } from "../lib/format";
-  import { app, dur, toast, toastError } from "../lib/state.svelte";
+  import { t } from "../lib/i18n.svelte";
+  import { reveal } from "../lib/motion";
+  import { app, toast, toastError } from "../lib/state.svelte";
   import type { ContentKind, SearchHit, SearchQuery } from "../lib/types";
 
-  const CATEGORIES: Record<ContentKind, [string, string][]> = {
-    mod: [["optimization", "Optymalizacja"], ["technology", "Technologia"], ["adventure", "Przygoda"], ["decoration", "Dekoracje"], ["magic", "Magia"], ["storage", "Przechowywanie"], ["utility", "Narzędzia"], ["worldgen", "Generowanie świata"], ["mobs", "Moby"], ["food", "Jedzenie"], ["library", "Biblioteki"]],
-    shader: [["realistic", "Realistyczne"], ["semi-realistic", "Półrealistyczne"], ["cartoon", "Kreskówkowe"], ["fantasy", "Fantasy"], ["vanilla-like", "Jak vanilla"], ["potato", "Słabe PC"], ["low", "Niskie"], ["high", "Wysokie"]],
-    resourcepack: [["16x", "16x"], ["32x", "32x"], ["64x", "64x+"], ["realistic", "Realistyczne"], ["simplistic", "Minimalistyczne"], ["themed", "Tematyczne"], ["tweaks", "Poprawki"], ["combat", "PvP"], ["gui", "GUI"], ["fonts", "Czcionki"]],
-  };
-  const SORTS = [["relevance", "Trafność"], ["downloads", "Pobrania"], ["follows", "Obserwujący"], ["newest", "Najnowsze"], ["updated", "Zaktualizowane"]] as const;
+  type Sort = NonNullable<SearchQuery["sort"]>;
+  const sorts: { value: Sort; label: string }[] = $derived([
+    { value: "relevance", label: t("discover.sortRelevance") },
+    { value: "downloads", label: t("discover.sortDownloads") },
+    { value: "follows", label: t("discover.sortFollows") },
+    { value: "newest", label: t("discover.sortNewest") },
+    { value: "updated", label: t("discover.sortUpdated") },
+  ]);
+  const kinds = $derived((["mod", "shader", "resourcepack"] as const).map((value) => ({ value, label: kindLabel(value) })));
+  const targets = $derived(app.instances.map((i) => ({ value: i.id, label: `${i.name} · ${loaderLabel(i.loader)} ${i.mcVersion}` })));
 
   let query = $state("");
-  let sort = $state<NonNullable<SearchQuery["sort"]>>("relevance");
+  let sort = $state<Sort>("relevance");
   let categories = $state<string[]>([]);
   let matchVersion = $state(true);
   let hits = $state<SearchHit[]>([]);
@@ -34,6 +45,7 @@
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   let seq = 0;
+  onDestroy(() => { clearTimeout(timer); seq++; });
   async function run(append = false) {
     const my = ++seq;
     loading = true;
@@ -67,10 +79,14 @@
 
   $effect(() => {
     void app.contentRev;
-    const t = target;
+    const instance = target;
     const kind = app.discover.kind;
-    if (!t) return;
-    api.listContent(t.id, kind).then((list) => (installedIds = new Set(list.map((c) => c.meta?.projectId).filter(Boolean) as string[]))).catch(() => {});
+    if (!instance) return;
+    let stale = false;
+    api.listContent(instance.id, kind)
+      .then((list) => { if (!stale) installedIds = new Set(list.map((c) => c.meta?.projectId).filter(Boolean) as string[]); })
+      .catch(() => {});
+    return () => { stale = true; };
   });
 
   function setKind(k: ContentKind) {
@@ -83,12 +99,12 @@
   }
 
   async function quickInstall(h: SearchHit) {
-    if (!target) return toast("Najpierw utwórz instancję", "error");
+    if (!target) return toast(t("discover.createFirst"), "error");
     installing[h.projectId] = true;
     try {
       const done = await api.installContent(target.id, app.discover.kind, h.projectId);
       const deps = done.filter((d) => d.dependency).map((d) => d.title);
-      toast(`Zainstalowano ${h.title}${deps.length ? ` + ${deps.join(", ")}` : ""}`, "success");
+      toast(deps.length ? t("discover.installedWith", { title: h.title, deps: deps.join(", ") }) : t("discover.installed", { title: h.title }), "success");
       app.contentRev++;
     } catch (e) {
       toastError(e);
@@ -98,273 +114,200 @@
   }
 
   const vanillaMods = $derived(app.discover.kind === "mod" && (target?.loader === "vanilla" || target?.loader === "rust"));
+  const onlyLabel = $derived(target ? t("discover.compatibleWith", { version: target.mcVersion }) : t("discover.compatible"));
 </script>
 
-<div class="page">
+<div class="view">
   <header class="head">
-    <h1>Przeglądaj</h1>
+    <h1 class="page-title">{t("nav.discover")}</h1>
     <div class="target">
-      <span class="dim">Instaluj do</span>
-      <select class="input" bind:value={app.discover.instanceId}>
-        {#each app.instances as i (i.id)}
-          <option value={i.id}>{i.name} · {loaderLabel(i.loader)} {i.mcVersion}</option>
-        {/each}
-      </select>
+      <span class="dim">{t("discover.installTo")}</span>
+      <Select label={t("discover.installTo")} width={260} value={app.discover.instanceId ?? ""} options={targets} onchange={(id) => (app.discover.instanceId = id)} />
     </div>
   </header>
 
-  <div class="kinds">
-    {#each ["mod", "shader", "resourcepack"] as const as k (k)}
-      <button class="kind" class:on={app.discover.kind === k} onclick={() => setKind(k)}>{kindLabel(k)}</button>
-    {/each}
+  <div class="filters">
+    <Segmented label={t("discover.kind")} value={app.discover.kind} options={kinds} onchange={setKind} />
+    <Option bind:checked={matchVersion} label={onlyLabel} title={t("discover.compatibleHint")} />
   </div>
 
-  <div class="bar">
-    <div class="search">
-      <Search size={16} />
-      <input class="input" placeholder="Szukaj na Modrinth… (np. sodium, minimap, faithful)" bind:value={query} />
-    </div>
-    <select class="input sort" bind:value={sort}>
-      {#each SORTS as [k, l] (k)}<option value={k}>{l}</option>{/each}
-    </select>
-    <label class="chk" title="Pokazuj tylko to, co działa z wybraną instancją">
-      <input type="checkbox" bind:checked={matchVersion} /> Tylko zgodne {#if target}({target.mcVersion}){/if}
-    </label>
+  <div class="filters">
+    <div class="grow"><SearchInput bind:value={query} placeholder={t("discover.search")} width="100%" /></div>
+    <Select label={t("discover.sort")} width={160} value={sort} options={sorts} onchange={(v) => (sort = v)} />
   </div>
 
-  <div class="cats">
-    {#each CATEGORIES[app.discover.kind] as [k, l] (k)}
-      <button class="chip cat" class:accent={categories.includes(k)} onclick={() => toggleCat(k)}>{l}</button>
+  <div class="cats" role="group" aria-label={t("discover.categories")}>
+    {#each CATEGORIES[app.discover.kind] as tag (tag)}
+      <button class="cat" aria-pressed={categories.includes(tag)} onclick={() => toggleCat(tag)}>{categoryLabel(tag)}</button>
     {/each}
   </div>
 
   {#if vanillaMods}
-    <div class="warnbox card">Wybrana instancja nie obsługuje modów — wymagają Fabric albo Quilt. Zmień loader w ustawieniach instancji albo wybierz inną.</div>
+    <p class="notice">{t("discover.noMods")}</p>
   {/if}
 
   {#if error}
-    <div class="warnbox card">{error}</div>
+    <p class="notice">{error}</p>
   {/if}
 
   <div class="results">
     {#each hits as h, n (h.projectId)}
-      <div class="hit card" in:fly={{ y: 10, duration: dur(300), delay: dur(Math.min(n % 20, 10) * 25) }}>
+      <div class="hit" in:reveal|global={{ index: n }}>
         <button class="open" onclick={() => (app.project = { id: h.projectId, kind: app.discover.kind })}>
           {#if h.iconUrl}<img src={h.iconUrl} alt="" loading="lazy" />{:else}<span class="ph"></span>{/if}
           <span class="txt">
-            <span class="t"><b>{h.title}</b> <small class="dim">od {h.author}</small></span>
-            <span class="d">{h.description}</span>
+            <span class="name"><b>{h.title}</b> <small>{t("discover.by", { author: h.author })}</small></span>
+            <span class="desc">{h.description}</span>
             <span class="meta">
               <span><Download size={12} /> {compact(h.downloads)}</span>
               <span><Heart size={12} /> {compact(h.follows)}</span>
               <span>{relativeTime(Date.parse(h.dateModified) / 1000)}</span>
-              {#each h.displayCategories.slice(0, 3) as c (c)}<span class="chip mini">{c}</span>{/each}
+              {#if h.displayCategories.length}<span class="tags">{h.displayCategories.slice(0, 3).map(categoryLabel).join(" · ")}</span>{/if}
             </span>
           </span>
         </button>
         {#if installedIds.has(h.projectId)}
-          <span class="chip accent inst"><Check size={13} /> Zainstalowany</span>
+          <span class="done"><Check size={14} /> {t("discover.isInstalled")}</span>
         {:else}
-          <button class="btn primary inst" disabled={!target || installing[h.projectId] || vanillaMods} onclick={() => quickInstall(h)}>
-            {#if installing[h.projectId]}<LoaderCircle size={15} class="spin" />{:else}<Download size={15} />{/if} Zainstaluj
+          <button class="btn inst" disabled={!target || installing[h.projectId] || vanillaMods} onclick={() => quickInstall(h)}>
+            {#if installing[h.projectId]}<LoaderCircle size={14} class="spin" />{:else}<Download size={14} />{/if} {t("common.install")}
           </button>
         {/if}
       </div>
     {:else}
-      {#if !loading}<div class="empty dim">Nic nie znaleziono.</div>{/if}
+      {#if !loading}<p class="empty">{t("discover.nothing")}</p>{/if}
     {/each}
   </div>
 
   <div class="more">
     {#if loading}
-      <LoaderCircle size={20} class="spin" />
+      <LoaderCircle size={16} class="spin" />
     {:else if hits.length < total}
-      <button class="btn" onclick={() => run(true)}>Załaduj więcej ({total - hits.length})</button>
+      <button class="btn" onclick={() => run(true)}>{t("discover.more", { n: total - hits.length })}</button>
     {/if}
   </div>
 </div>
 
 <style>
-  .page {
+  .view {
     height: 100%;
     overflow: auto;
-    padding: 6px 22px 22px 6px;
+    padding: var(--page-pad);
   }
   .head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    margin: 4px 0 14px;
-  }
-  h1 {
-    font-size: 1.65rem;
-    font-weight: 700;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
   }
   .target {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 0.88rem;
-  }
-  .target select {
-    width: 280px;
-    height: 36px;
-  }
-  .kinds {
-    display: flex;
-    gap: 4px;
-    padding: 4px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 11px;
-    width: fit-content;
-    margin-bottom: 12px;
-  }
-  .kind {
-    padding: 7px 14px;
-    border-radius: 8px;
-    font-weight: 600;
-    color: var(--text-2);
-    transition: background 0.2s, color 0.2s;
-  }
-  .kind.on {
-    background: var(--panel-3);
-    color: var(--text);
-  }
-  .bar {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-  }
-  .search {
-    flex: 1;
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-  .search :global(svg) {
-    position: absolute;
-    left: 12px;
-    color: var(--text-3);
-  }
-  .search .input {
-    padding-left: 38px;
-    height: 40px;
-  }
-  .sort {
-    width: 160px;
-    height: 40px;
-  }
-  .chk {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 0.86rem;
-    color: var(--text-2);
+    gap: 8px;
+    min-width: 0;
+    font-size: var(--fs-13);
     white-space: nowrap;
   }
-  .chk input {
-    accent-color: var(--accent);
+  .filters {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
   }
+  .grow { flex: 1; min-width: 200px; }
   .cats {
     display: flex;
-    gap: 6px;
     flex-wrap: wrap;
-    margin: 12px 0 14px;
+    gap: 4px;
+    margin: 12px 0 16px;
   }
   .cat {
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: var(--radius-s);
+    color: var(--text-2);
+    font-size: var(--fs-12);
+    font-weight: 500;
+    transition: background 0.12s, color 0.12s;
   }
-  .cat:hover {
-    border-color: var(--border-2);
-  }
-  .warnbox {
-    padding: 12px 16px;
-    margin-bottom: 12px;
+  .cat:hover { background: var(--panel-2); color: var(--text); }
+  .cat[aria-pressed="true"] { background: var(--accent-soft); color: var(--text); }
+  .notice {
+    margin: 0 0 8px;
     color: var(--warning);
-    border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+    font-size: var(--fs-13);
+    line-height: 1.4;
   }
-  .results {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
+  .results { border-top: 1px solid var(--border); }
   .hit {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px 10px 10px;
-    border-radius: var(--radius);
-    transition: border-color 0.2s, transform 0.2s var(--ease);
-  }
-  .hit:hover {
-    border-color: var(--border-2);
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
   }
   .open {
     flex: 1;
-    display: flex;
-    gap: 14px;
-    align-items: center;
-    text-align: left;
     min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    text-align: left;
   }
   .open img,
   .ph {
-    width: 58px;
-    height: 58px;
-    border-radius: 12px;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    border-radius: var(--radius);
     object-fit: cover;
     background: var(--panel-2);
-    flex-shrink: 0;
   }
   .txt {
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    min-width: 0;
+    gap: 2px;
   }
-  .t b {
-    font-weight: 650;
-  }
-  .t small {
-    font-size: 0.8rem;
-  }
-  .d {
-    color: var(--text-2);
-    font-size: 0.86rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+  .name, .desc, .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .name b { font-size: var(--fs-14); font-weight: 500; }
+  .name small { color: var(--text-3); font-size: var(--fs-12); }
+  .open:hover b { color: var(--accent-strong); }
+  .desc { color: var(--text-2); font-size: var(--fs-13); }
   .meta {
     display: flex;
-    gap: 12px;
     align-items: center;
+    gap: 12px;
     color: var(--text-3);
-    font-size: 0.78rem;
+    font-size: var(--fs-12);
   }
-  .meta > span:not(.chip) {
-    display: flex;
+  .meta > span { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .meta .tags { display: block; flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .inst { flex-shrink: 0; }
+  .done {
+    flex-shrink: 0;
+    display: inline-flex;
     align-items: center;
     gap: 4px;
-  }
-  .mini {
-    height: 19px;
-    font-size: 0.7rem;
-    padding: 0 7px;
-  }
-  .inst {
-    flex-shrink: 0;
+    color: var(--text-2);
+    font-size: var(--fs-13);
   }
   .empty {
-    padding: 40px;
+    margin: 0;
+    padding: 32px 0;
+    color: var(--text-3);
+    font-size: var(--fs-13);
     text-align: center;
   }
   .more {
     display: grid;
     place-items: center;
-    padding: 16px;
+    min-height: 32px;
+    padding-top: 16px;
+    color: var(--text-3);
   }
 </style>

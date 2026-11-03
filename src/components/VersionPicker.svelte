@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { LoaderCircle, Search } from "@lucide/svelte";
+  import { LoaderCircle } from "@lucide/svelte";
+  import Option from "./Option.svelte";
+  import SearchInput from "./SearchInput.svelte";
+  import { locale, t } from "../lib/i18n.svelte";
+  import type { Key } from "../lib/locales/pl";
   import { app, loadVersions, toastError } from "../lib/state.svelte";
 
   let { value = $bindable("") }: { value?: string } = $props();
@@ -21,115 +25,77 @@
   const list = $derived(
     (app.versions?.versions ?? []).filter(
       (v) =>
-        (v.kind === "release" || (snapshots && v.kind === "snapshot") || (old && v.kind.startsWith("old"))) &&
+        (v.id === value || v.kind === "release" || (snapshots && v.kind === "snapshot") || (old && v.kind.startsWith("old"))) &&
         (!query || v.id.toLowerCase().includes(query.toLowerCase())),
     ),
   );
 
-  function kindLabel(k: string) {
-    return k === "release" ? "" : k === "snapshot" ? "snapshot" : k === "old_beta" ? "beta" : "alpha";
-  }
+  const TAGS: Record<string, Key> = { snapshot: "version.snapshot", old_beta: "version.beta", old_alpha: "version.alpha" };
 </script>
 
 <div class="picker">
   <div class="top">
-    <div class="search">
-      <Search size={15} />
-      <input class="input" placeholder="Szukaj wersji…" bind:value={query} />
-    </div>
-    <label class="chk"><input type="checkbox" bind:checked={snapshots} /> Snapshoty</label>
-    <label class="chk"><input type="checkbox" bind:checked={old} /> Stare</label>
+    <div class="grow"><SearchInput bind:value={query} placeholder={t("version.search")} width="100%" /></div>
+    <Option bind:checked={snapshots} label={t("version.snapshots")} />
+    <Option bind:checked={old} label={t("version.old")} />
   </div>
   <div class="list">
     {#if loading}
-      <div class="center"><LoaderCircle size={18} class="spin" /></div>
+      <div class="center"><LoaderCircle size={16} class="spin" /></div>
     {:else}
       {#each list as v (v.id)}
-        <button class="ver" class:on={v.id === value} onclick={() => (value = v.id)}>
+        <button class="ver" aria-pressed={v.id === value} onclick={() => (value = v.id)}>
           <span class="mono">{v.id}</span>
-          {#if v.id === app.versions?.latestRelease}<span class="chip accent">najnowsza</span>{/if}
-          {#if kindLabel(v.kind)}<span class="chip">{kindLabel(v.kind)}</span>{/if}
-          <span class="date">{new Date(v.releaseTime).toLocaleDateString("pl-PL")}</span>
+          {#if v.id === app.versions?.latestRelease}<span class="chip">{t("version.latest")}</span>{/if}
+          {#if TAGS[v.kind]}<span class="chip">{t(TAGS[v.kind])}</span>{/if}
+          <span class="date">{new Date(v.releaseTime).toLocaleDateString(locale())}</span>
         </button>
       {:else}
-        <div class="center dim">Brak wyników</div>
+        <div class="center dim">{t("common.noResults")}</div>
       {/each}
     {/if}
   </div>
 </div>
 
 <style>
-  .picker {
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-    background: var(--panel-2);
-  }
   .top {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px;
-    border-bottom: 1px solid var(--border);
+    gap: 8px 12px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
   }
-  .search {
-    flex: 1;
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-  .search :global(svg) {
-    position: absolute;
-    left: 11px;
-    color: var(--text-3);
-  }
-  .search .input {
-    padding-left: 34px;
-    height: 34px;
-    background: var(--panel);
-  }
-  .chk {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.85rem;
-    color: var(--text-2);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .chk input {
-    accent-color: var(--accent);
-  }
+  .grow { flex: 1; min-width: 160px; }
   .list {
-    height: 210px;
+    height: 196px;
     overflow: auto;
     padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
   .ver {
     width: 100%;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 7px 10px;
-    border-radius: 7px;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: var(--radius-s);
+    font-size: var(--fs-13);
     text-align: left;
     transition: background 0.12s;
   }
-  .ver:hover {
-    background: var(--panel-3);
-  }
-  .ver.on {
-    background: var(--accent-soft);
-    box-shadow: inset 0 0 0 1px var(--accent-line);
-  }
+  .ver:hover { background: var(--panel-2); }
+  .ver[aria-pressed="true"] { background: var(--accent-soft); }
   .date {
     margin-left: auto;
-    font-size: 0.8rem;
     color: var(--text-3);
+    font-size: var(--fs-12);
   }
   .center {
     display: grid;
     place-items: center;
     height: 100%;
+    font-size: var(--fs-13);
   }
 </style>

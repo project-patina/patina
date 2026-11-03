@@ -7,7 +7,7 @@ If you choose a different name, update repository metadata and links first.
 ## Contents and licenses
 
 - Original launcher code and Patina modifications: root `LICENSE`, MIT.
-- Horizon-derived client: unchanged `engine/LICENSE`, original Horizon copyright.
+- Client in `engine/`: unchanged `engine/LICENSE`, with its original copyright.
 - Patina changes to the engine: `engine/LICENSE-PATINA`, MIT.
 - Fonts, icons and vendored components: both `THIRD_PARTY_NOTICES.md` files and
   their referenced full license texts. Preserve them all.
@@ -59,10 +59,32 @@ gh repo create project-patina/patina --public --source=. --remote=origin --push
 
 Suggested description:
 
-> Open-source, vibecoded Minecraft launcher in Svelte and Tauri, with a Horizon-derived Rust client. Minimal UI, themes and instance management. MIT licensed.
+> Open-source, vibecoded Minecraft launcher in Svelte and Tauri, with an optional Rust client. Minimal UI, themes and instance management. MIT licensed.
 
 Suggested topics: `minecraft`, `launcher`, `rust`, `tauri`, `svelte`, `typescript`,
 `open-source`, `vibecoding`.
+
+## Patina mods
+
+Rust instances list mods from `project-patina/patina-mods`. Its `main` branch holds
+`index.json` and `index.json.sig`, a `tauri signer sign` signature made with the update
+key. Packages are `.pmod` files in that repository's releases, at most 64 MiB.
+
+```json
+{
+  "schema": 1,
+  "mods": [{
+    "id": "minimap", "name": "Minimap", "version": "1.0.0", "mcVersion": "26.3",
+    "summary": { "pl": "Mapa okolicy", "en": "A map of the area" },
+    "icon": "https://...",
+    "url": "https://github.com/project-patina/patina-mods/releases/download/minimap-1.0.0/minimap.pmod",
+    "sha256": "...", "size": 123456
+  }]
+}
+```
+
+`id` must equal the id in the mod's `patina-mod.toml`, because the launcher turns the
+mod on under that name. `icon` is optional. One invalid entry rejects the whole index.
 
 After publication, enable private vulnerability reporting and review repository
 settings. CI definitions are included, but their first GitHub-hosted run is not

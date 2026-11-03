@@ -191,8 +191,6 @@ pub struct Settings {
     pub patina: crate::graphics::Graphics,
     /// Controller settings (`patina-controller.txt`, Patina's own).
     pub controller: crate::gamepad::PadSettings,
-    /// Patina's optional extras (`patina-extras.txt`), all off by default.
-    pub extras: crate::extras::Extras,
     /// The Patina mods turned on (`patina-mods.txt`), all off by default.
     pub mods: crate::mod_list::ModList,
     /// The packs in `shaderpacks/`, listed when the Shader Packs page opens; the pick is
@@ -276,7 +274,6 @@ impl Default for Settings {
             ctrl_click_emulates_right_click: false,
             patina: Default::default(),
             controller: Default::default(),
-            extras: Default::default(),
             mods: Default::default(),
             shader_packs: Vec::new(),
         }
@@ -317,10 +314,6 @@ impl Settings {
             .parent()
             .map(crate::gamepad::PadSettings::load)
             .unwrap_or_default();
-        let extras = path
-            .parent()
-            .map(crate::extras::Extras::load)
-            .unwrap_or_default();
         let mods = path
             .parent()
             .map(crate::mod_list::ModList::load)
@@ -329,14 +322,12 @@ impl Settings {
             Ok(bytes) => Self {
                 patina,
                 controller,
-                extras,
                 mods,
                 ..Self::parse(&String::from_utf8_lossy(&bytes))
             },
             Err(_) => Self {
                 patina,
                 controller,
-                extras,
                 mods,
                 ..Self::default()
             },
@@ -442,7 +433,6 @@ impl Settings {
             ctrl_click_emulates_right_click: f.bool("ctrlClickEmulatesRightClick"),
             patina: Default::default(),
             controller: Default::default(),
-            extras: Default::default(),
             mods: Default::default(),
             shader_packs: Vec::new(),
             auto_jump: f.bool("autoJump"),
@@ -595,7 +585,7 @@ impl Settings {
     }
     /// These settings with one `options.txt` value changed (`patina-ctl
     /// options-set`, as `OptionsFile::set_text` reads it). Patina's own
-    /// files (graphics, controller, extras, the mod list) aren't in
+    /// files (graphics, controller, the mod list) aren't in
     /// `options.txt`, so they stay as they are.
     pub fn with_option(&self, key: &str, value: &str) -> Result<Self, String> {
         let mut file = self.to_file();
@@ -603,7 +593,6 @@ impl Settings {
         Ok(Self {
             patina: self.patina.clone(),
             controller: self.controller.clone(),
-            extras: self.extras.clone(),
             mods: self.mods.clone(),
             ..Self::from_file(file)
         })
@@ -618,7 +607,6 @@ impl Settings {
         if let Some(dir) = path.parent() {
             self.patina.save(dir);
             self.controller.save(dir);
-            self.extras.save(dir);
             self.mods.save(dir);
         }
     }
@@ -758,6 +746,8 @@ pub enum Opt {
     PadGlyphs,
     PadMenuNav,
     PadKeyboard,
+    /// A row of Patina's own graphics settings (`graphics_ui`).
+    Graphics(crate::graphics_ui::Gfx),
     /// `options.modelPart.*`: one skin layer (index into `options_file::MODEL_PARTS`).
     ModelPart(usize),
     MainHand,
@@ -776,13 +766,11 @@ mod tests {
     fn an_option_set_keeps_patina_files() {
         let mut s = Settings::parse("fov:70\n");
         s.mods.enabled.insert("zoom".into());
-        s.extras.minimap = true;
         s.patina.fog = !s.patina.fog;
         s.controller.vibration = !s.controller.vibration;
         let set = s.with_option("fov", "90").unwrap();
         assert_eq!(set.fov, 90.0);
         assert_eq!(set.mods, s.mods);
-        assert_eq!(set.extras, s.extras);
         assert_eq!(set.patina, s.patina);
         assert_eq!(set.controller, s.controller);
         assert!(s.with_option("fov", "200").is_err());

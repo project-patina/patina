@@ -10,19 +10,19 @@ use super::Vertex;
 /// that it sits in front of the world in the shared depth buffer.
 const HAND_DEPTH: f32 = 0.125;
 
-/// `HzHand`: the hand's projection and its inverse.
+/// `PtHand`: the hand's projection and its inverse.
 const UNIFORM: u64 = 2 * 64;
 
 /// What `gbuffers_hand` reads: the entity inputs, and the hand's projection from set 1.
 pub fn inputs() -> patina_shaders::GbuffersInputs {
     let mut inputs = super::pack_entities::inputs();
     inputs.declarations.push_str(
-        "layout(set = 1, binding = 1) uniform HzHand { mat4 hz_hand_projection; mat4 hz_hand_projection_inverse; };\n",
+        "layout(set = 1, binding = 1) uniform PtHand { mat4 pt_hand_projection; mat4 pt_hand_projection_inverse; };\n",
     );
     inputs.body.push_str(
-        "    hz_ProjectionMatrix = hz_hand_projection;\n    \
-         hz_ProjectionMatrixInverse = hz_hand_projection_inverse;\n    \
-         hz_ModelViewProjectionMatrix = hz_hand_projection * hz_ModelViewMatrix;\n",
+        "    pt_ProjectionMatrix = pt_hand_projection;\n    \
+         pt_ProjectionMatrixInverse = pt_hand_projection_inverse;\n    \
+         pt_ModelViewProjectionMatrix = pt_hand_projection * pt_ModelViewMatrix;\n",
     );
     inputs
 }

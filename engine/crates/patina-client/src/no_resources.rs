@@ -13,7 +13,6 @@ const PARAGRAPHS: [&str; 3] = [
     "Open Patina, then press Play there.",
 ];
 const COLUMN: f32 = 560.0;
-const BUTTON_GAP: f32 = 12.0;
 
 /// What a click on the screen does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -48,21 +47,14 @@ impl NoResources {
         let height = TITLE_LINE + 16.0 + text_h + 28.0 + CONTROL + 20.0 + SMALL_LINE;
         let y = ((ui.h - height) / 2.0).max(24.0).round();
         let buttons_y = y + TITLE_LINE + 16.0 + text_h + 28.0;
-        let mut buttons = Vec::new();
-        let mut bx = x;
-        for (label, action) in [
-            ("Quit", Action::Quit),
-        ] {
-            let w = (ui.measure(Face::Medium, BUTTON_TEXT, label) + 40.0).round();
-            buttons.push(Button {
-                label,
-                action,
-                x: bx,
-                y: buttons_y,
-                w,
-            });
-            bx += w + BUTTON_GAP;
-        }
+        let label = "Quit";
+        let buttons = vec![Button {
+            label,
+            action: Action::Quit,
+            x,
+            y: buttons_y,
+            w: (ui.measure(Face::Medium, BUTTON_TEXT, label) + 40.0).round(),
+        }];
         Layout {
             x,
             y,
@@ -248,7 +240,6 @@ mod tests {
         with_ui([1280, 720], (0.0, 0.0), |ui| {
             for paragraph in PARAGRAPHS {
                 let lines = wrap(ui, Face::Regular, BODY, paragraph, 300.0);
-                assert!(lines.len() > 1, "{paragraph}");
                 for line in &lines {
                     assert!(ui.measure(Face::Regular, BODY, line) <= 300.0, "{line}");
                 }

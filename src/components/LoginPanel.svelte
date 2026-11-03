@@ -1,12 +1,16 @@
 <script lang="ts">
   import { openUrl } from "@tauri-apps/plugin-opener";
-  import { fade } from "svelte/transition";
-  import { Copy, ExternalLink, KeyRound, LoaderCircle, ShieldCheck } from "@lucide/svelte";
+  import { Copy, ExternalLink, KeyRound, LoaderCircle } from "@lucide/svelte";
   import { api, errText } from "../lib/api";
-  import { dur, loadSkin, refreshAccounts, toast } from "../lib/state.svelte";
+  import { t } from "../lib/i18n.svelte";
+  import { page } from "../lib/motion";
+  import { loadSkin, refreshAccounts, toast, toastError } from "../lib/state.svelte";
   import type { Account, DeviceCode } from "../lib/types";
 
   let { onsuccess }: { onsuccess: (a: Account) => void } = $props();
+
+  // The backend's Error::Cancelled, in either language: closing the sign-in is not a failure.
+  const CANCELLED = ["Anulowano", "Cancelled"];
 
   let mode = $state<"idle" | "window" | "device">("idle");
   let code = $state<DeviceCode | null>(null);
@@ -26,7 +30,7 @@
       await done(await api.loginMicrosoft());
     } catch (e) {
       const msg = errText(e);
-      if (msg !== "Anulowano") error = msg;
+      if (!CANCELLED.includes(msg)) error = msg;
       mode = "idle";
     }
   }
@@ -40,7 +44,7 @@
       await done(await api.loginDeviceFinish(code));
     } catch (e) {
       const msg = errText(e);
-      if (msg !== "Anulowano") error = msg;
+      if (!CANCELLED.includes(msg)) error = msg;
       mode = "idle";
     }
   }
@@ -53,118 +57,90 @@
 
 <div class="login">
   {#if mode === "idle"}
-    <div in:fade={{ duration: dur(200) }} class="stack">
-      <button class="ms" onclick={withWindow}>
-        <svg width="18" height="18" viewBox="0 0 21 21" aria-hidden="true">
-          <rect x="1" y="1" width="9" height="9" fill="#f25022" /><rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-          <rect x="1" y="11" width="9" height="9" fill="#00a4ef" /><rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+    <div in:page class="stack">
+      <button class="btn primary ms" onclick={withWindow}>
+        <svg width="14" height="14" viewBox="0 0 21 21" fill="currentColor" aria-hidden="true">
+          <rect x="1" y="1" width="9" height="9" /><rect x="11" y="1" width="9" height="9" />
+          <rect x="1" y="11" width="9" height="9" /><rect x="11" y="11" width="9" height="9" />
         </svg>
-        Zaloguj przez Microsoft
+        {t("login.microsoft")}
       </button>
-      <button class="btn ghost alt" onclick={withCode}><KeyRound size={15} /> Zaloguj kodem w przeglądarce</button>
-      <p class="note"><ShieldCheck size={14} /> Logujesz się na oficjalnej stronie Microsoftu. Launcher nie widzi Twojego hasła.</p>
+      <button class="btn ghost" onclick={withCode}><KeyRound size={14} /> {t("login.code")}</button>
+      <p class="note">{t("login.note")}</p>
     </div>
   {:else if mode === "window"}
-    <div in:fade={{ duration: dur(200) }} class="stack center">
-      <LoaderCircle size={26} class="spin" />
-      <p class="muted">Dokończ logowanie w oknie Microsoft…</p>
-      <button class="btn sm" onclick={cancel}>Anuluj</button>
+    <div in:page class="stack center">
+      <LoaderCircle size={20} class="spin" />
+      <p class="muted">{t("login.finishInWindow")}</p>
+      <button class="btn sm" onclick={cancel}>{t("common.cancel")}</button>
     </div>
   {:else if mode === "device" && code}
-    <div in:fade={{ duration: dur(200) }} class="stack center">
-      <p class="muted">Wejdź na stronę i wpisz kod (już skopiowany):</p>
-      <button class="code mono" onclick={() => navigator.clipboard?.writeText(code!.userCode).then(() => toast("Skopiowano kod"))}>
-        {code.userCode} <Copy size={15} />
+    <div in:page class="stack center">
+      <p class="muted">{t("login.enterCode")}</p>
+      <button class="code mono" title={t("common.copy")} onclick={() => navigator.clipboard?.writeText(code!.userCode).then(() => toast(t("login.codeCopied"))).catch(toastError)}>
+        {code.userCode} <Copy size={14} />
       </button>
       <div class="row">
-        <button class="btn primary" onclick={() => openUrl(code!.verificationUri)}><ExternalLink size={15} /> Otwórz {code.verificationUri.replace("https://", "")}</button>
-        <button class="btn" onclick={cancel}>Anuluj</button>
+        <button class="btn primary" onclick={() => openUrl(code!.verificationUri).catch(toastError)}><ExternalLink size={14} /> {t("login.openPage", { site: code.verificationUri.replace("https://", "") })}</button>
+        <button class="btn" onclick={cancel}>{t("common.cancel")}</button>
       </div>
-      <p class="dim small"><LoaderCircle size={13} class="spin" /> Czekam na potwierdzenie…</p>
+      <p class="note"><LoaderCircle size={12} class="spin" /> {t("login.waiting")}</p>
     </div>
   {/if}
   {#if error}
-    <p class="error selectable" transition:fade={{ duration: dur(150) }}>{error}</p>
+    <p class="error selectable">{error}</p>
   {/if}
 </div>
 
 <style>
-  .login {
-    width: 100%;
-  }
+  .login { width: 100%; }
   .stack {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
   .center {
     align-items: center;
     text-align: center;
     padding: 8px 0;
   }
-  .ms {
-    height: 48px;
-    border-radius: var(--radius);
-    background: var(--play-bg);
-    color: var(--play-fg);
-    font-weight: 650;
-    font-size: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    transition: transform 0.2s var(--ease), box-shadow 0.25s var(--ease);
-  }
-  .ms:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 10px 30px -10px var(--accent);
-  }
-  .ms:active {
-    transform: scale(0.98);
-  }
-  .alt {
-    color: var(--text-2);
-  }
+  .ms { height: 40px; font-size: var(--fs-14); }
+  .muted { font-size: var(--fs-13); }
   .note {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    margin: 6px 0 0;
+    gap: 4px;
+    margin-top: 4px;
     color: var(--text-3);
-    font-size: 0.8rem;
+    font-size: var(--fs-12);
+    line-height: 1.4;
+    text-align: center;
   }
   .code {
-    font-size: 1.7rem;
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    padding: 12px 20px;
-    border-radius: var(--radius);
-    background: var(--panel-2);
-    border: 1px dashed var(--accent-line);
     display: flex;
     align-items: center;
     gap: 12px;
+    padding: 8px 16px;
+    border-radius: var(--radius);
+    background: var(--panel-2);
+    border: 1px solid var(--border-2);
+    font-size: var(--fs-20);
+    font-weight: 600;
+    letter-spacing: 0.08em;
   }
   .row {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 8px;
   }
-  .small {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.82rem;
-    margin: 0;
-  }
   .error {
+    margin-top: 12px;
     color: var(--danger);
-    font-size: 0.88rem;
+    font-size: var(--fs-13);
+    line-height: 1.4;
     text-align: center;
-    margin: 12px 0 0;
-    line-height: 1.45;
   }
-  p {
-    margin: 0;
-  }
+  p { margin: 0; }
 </style>

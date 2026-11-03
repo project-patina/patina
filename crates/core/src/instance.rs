@@ -100,7 +100,7 @@ fn valid_id(id: &str) -> bool {
 pub fn validate_version_id(id: &str) -> Result<()> {
     if id.trim().is_empty() || id.len() > 128 || id == "." || id == ".."
         || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b" ._+-".contains(&b)) {
-        bail!("Niepoprawny identyfikator wersji gry");
+        bail!("Niepoprawny identyfikator wersji gry", "Invalid game version id");
     }
     Ok(())
 }
@@ -108,13 +108,13 @@ pub fn validate_version_id(id: &str) -> Result<()> {
 impl Instance {
     pub fn load(ctx: &Ctx, id: &str) -> Result<Self> {
         if !valid_id(id) {
-            bail!("Niepoprawny identyfikator instancji");
+            bail!("Niepoprawny identyfikator instancji", "Invalid instance id");
         }
         let path = ctx.paths.instance_dir(id).join("instance.json");
-        let bytes = std::fs::read(&path).map_err(|_| Error::msg(format!("Nie znaleziono instancji {id}")))?;
+        let bytes = std::fs::read(&path).map_err(|_| Error::msg(crate::tr!("Nie znaleziono instancji {id}", "Instance {id} not found")))?;
         let inst: Self = serde_json::from_slice(&bytes)?;
         if inst.id != id {
-            bail!("Identyfikator instancji nie zgadza się z folderem");
+            bail!("Identyfikator instancji nie zgadza się z folderem", "The instance id does not match its folder");
         }
         validate_version_id(&inst.mc_version)?;
         Ok(inst)
@@ -122,7 +122,7 @@ impl Instance {
 
     pub fn save(&self, ctx: &Ctx) -> Result<()> {
         if !valid_id(&self.id) {
-            bail!("Niepoprawny identyfikator instancji");
+            bail!("Niepoprawny identyfikator instancji", "Invalid instance id");
         }
         crate::paths::write_atomic(&ctx.paths.instance_dir(&self.id).join("instance.json"), &serde_json::to_vec_pretty(self)?)?;
         Ok(())
@@ -143,7 +143,7 @@ impl Instance {
     pub fn create(ctx: &Ctx, req: NewInstance) -> Result<Self> {
         let name = req.name.trim();
         if name.is_empty() {
-            bail!("Podaj nazwę instancji");
+            bail!("Podaj nazwę instancji", "Enter an instance name");
         }
         if req.loader != Loader::Rust {
             validate_version_id(&req.mc_version)?;
@@ -179,13 +179,13 @@ impl Instance {
     /// Move the instance folder to the system trash (recoverable).
     pub fn delete(ctx: &Ctx, id: &str) -> Result<()> {
         if !valid_id(id) {
-            bail!("Niepoprawny identyfikator instancji");
+            bail!("Niepoprawny identyfikator instancji", "Invalid instance id");
         }
         let dir = ctx.paths.instance_dir(id);
         if !dir.exists() {
             return Ok(());
         }
-        trash::delete(&dir).map_err(|e| Error::msg(format!("Nie udało się przenieść instancji do kosza. Pliki pozostały na miejscu: {e}")))?;
+        trash::delete(&dir).map_err(|e| Error::msg(crate::tr!("Nie udało się przenieść instancji do kosza. Pliki pozostały na miejscu: {e}", "Could not move the instance to the trash. Its files stayed in place: {e}")))?;
         Ok(())
     }
 }

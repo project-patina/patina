@@ -164,8 +164,8 @@ fn real_packs_read() {
             let folder = dimension_folder(&pack, id);
             // Vertex inputs like the game's (gfx/pack_post.rs writes the real ones).
             let terrain = patina_shaders::GbuffersInputs {
-                declarations: "layout(location = 0) in vec3 hz_v_pos;".into(),
-                body: "    hz_Vertex = vec4(hz_v_pos, 1.0);\n    hz_Color = vec4(1.0);\n".into(),
+                declarations: "layout(location = 0) in vec3 pt_v_pos;".into(),
+                body: "    pt_Vertex = vec4(pt_v_pos, 1.0);\n    pt_Color = vec4(1.0);\n".into(),
                 attributes: vec![("mc_Entity".into(), "vec4(-1.0)".into())],
                 ..Default::default()
             };

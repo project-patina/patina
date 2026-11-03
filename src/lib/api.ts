@@ -3,12 +3,17 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ContentItem, ContentKind, ContentUpdate, Image, Installed, McProfile, ModVersion, Project, SearchQuery, SearchResult,
   Account, AppInfo, DeviceCode, GameStateEvent, GearTextures, Instance, JavaInstall, Loader, LoaderVersion,
-  LogLine, NewInstance, Progress, ReleaseNote, RunningInfo, Settings, VersionList,
+  LogLine, NewInstance, OfficialCatalog, Progress, AnnouncementFeed, RunningInfo, Settings, UpdateInfo, UpdateProgress, VersionList, ServerEntry, ServerStatus,
 } from "./types";
+import type { Lang } from "./locales/resolve";
 
 export const api = {
   appInfo: () => invoke<AppInfo>("app_info"),
-  listNews: () => invoke<ReleaseNote[]>("list_news"),
+  announcements: (language: Lang) => invoke<AnnouncementFeed>("list_announcements", { language }),
+  setLanguage: (language: Lang) => invoke<void>("set_language", { language }),
+  updateCheck: () => invoke<UpdateInfo | null>("update_check"),
+  updateInstall: () => invoke<void>("update_install"),
+  updateRestart: () => invoke<void>("update_restart"),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<Settings>("save_settings", { settings }),
 
@@ -26,6 +31,9 @@ export const api = {
   deleteContent: (id: string, kind: ContentKind, file: string) => invoke<void>("delete_content", { id, kind, file }),
   importContent: (id: string, kind: ContentKind, paths: string[]) => invoke<string[]>("import_content", { id, kind, paths }),
   checkUpdates: (id: string, kind: ContentKind) => invoke<ContentUpdate[]>("check_content_updates", { id, kind }),
+  officialMods: (id: string) => invoke<OfficialCatalog>("official_mods", { id }),
+  installOfficialMod: (id: string, modId: string) => invoke<void>("install_official_mod", { id, modId }),
+  removeOfficialMod: (id: string, modId: string) => invoke<void>("remove_official_mod", { id, modId }),
   search: (query: SearchQuery) => invoke<SearchResult>("modrinth_search", { query }),
   project: (id: string) => invoke<Project>("modrinth_project", { id }),
   versions: (id: string, kind: ContentKind, instance: string | null, allVersions: boolean) =>
@@ -35,7 +43,6 @@ export const api = {
 
   importImage: (kind: "wallpaper" | "skin", path: string) => invoke<Image>("import_image", { kind, path }),
   gearTextures: () => invoke<GearTextures | null>("gear_textures"),
-  backdropFrames: () => invoke<number>("backdrop_frames"),
   listImages: (kind: "wallpaper" | "skin") => invoke<Image[]>("list_images", { kind }),
   deleteImage: (kind: "wallpaper" | "skin", id: string) => invoke<void>("delete_image", { kind, id }),
   getProfile: (uuid: string) => invoke<McProfile>("get_profile", { uuid }),
@@ -55,7 +62,9 @@ export const api = {
   loginDeviceFinish: (code: DeviceCode) => invoke<Account>("login_device_finish", { code }),
   cancelLogin: () => invoke<void>("cancel_login"),
 
-  launch: (id: string) => invoke<void>("launch", { id }),
+  launch: (id: string, join?: string) => invoke<void>("launch", { id, join: join ?? null }),
+  serversList: () => invoke<ServerEntry[]>("servers_list"),
+  serverPing: (address: string) => invoke<ServerStatus>("server_ping", { address }),
   stop: (id: string) => invoke<void>("stop", { id }),
   cancelInstall: (id: string) => invoke<void>("cancel_install", { id }),
   running: () => invoke<RunningInfo[]>("running"),
@@ -66,6 +75,7 @@ export const events = {
   progress: (f: (p: Progress) => void): Promise<UnlistenFn> => listen<Progress>("progress", (e) => f(e.payload)),
   gameState: (f: (s: GameStateEvent) => void): Promise<UnlistenFn> => listen<GameStateEvent>("game-state", (e) => f(e.payload)),
   gameLog: (f: (l: LogLine) => void): Promise<UnlistenFn> => listen<LogLine>("game-log", (e) => f(e.payload)),
+  updateProgress: (f: (p: UpdateProgress) => void): Promise<UnlistenFn> => listen<UpdateProgress>("update-progress", (e) => f(e.payload)),
 };
 
 /** Errors from commands arrive as plain strings. */
@@ -76,6 +86,6 @@ export function errText(e: unknown): string {
 }
 
 /** URL of an imported image served by the backend's `media` protocol. */
-export function mediaUrl(kind: "wallpaper" | "skin" | "backdrop", id: string): string {
+export function mediaUrl(kind: "wallpaper" | "skin", id: string): string {
   return convertFileSrc(`${kind}/${id}`, "media");
 }

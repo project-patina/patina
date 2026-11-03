@@ -69,27 +69,6 @@ impl Game<'_> {
         }
         out
     }
-    /// Patina's own name tag extra (`ownNameTag`): the player's own model and
-    /// name, while that model shows in third person. Vanilla never names the
-    /// camera entity (`LivingEntityRenderer.shouldShowName`).
-    fn own_name_tag(&self) -> Option<(&Mob, String)> {
-        if !self.settings.extras.own_name_tag
-            || self.camera_type.first_person()
-            || self.sleeping.is_some()
-            || self.spectator()
-            || self.own_invisible()
-        {
-            return None;
-        }
-        let m = self.player_model.as_ref()?;
-        // The name others see: the profile's on a server (single player's
-        // server thread included), else the local player's.
-        let name = match self.remote.as_ref() {
-            Some(r) if !r.profile_name.is_empty() => r.profile_name.clone(),
-            _ => self.acting_player_name().to_owned(),
-        };
-        Some((m, name))
-    }
     /// The names the name tags show this frame (the control socket's status).
     pub(super) fn shown_name_tags(&self, camera: glam::DVec3) -> Vec<String> {
         self.name_tags(camera, 1.0)
@@ -112,7 +91,6 @@ impl Game<'_> {
         });
         let players = players
             .into_iter()
-            .chain(self.own_name_tag())
             .map(|(m, name)| (m, name, true));
         // Who is riding whom: asked once per tag below, and rescanning every mob
         // for each tag made this quadratic in the number of loaded mobs.

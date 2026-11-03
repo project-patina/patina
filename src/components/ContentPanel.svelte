@@ -1,9 +1,14 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
-  import { ArrowUpCircle, Compass, FilePlus, FolderOpen, LoaderCircle, Package, RefreshCw, Replace, Sparkles, Trash2 } from "@lucide/svelte";
+  import { ArrowUpCircle, Compass, FilePlus, FolderOpen, Gauge, LoaderCircle, Package, RefreshCw, Replace, Trash2 } from "@lucide/svelte";
+  import SearchInput from "./SearchInput.svelte";
+  import Segmented from "./Segmented.svelte";
   import Toggle from "./Toggle.svelte";
   import { api } from "../lib/api";
   import { bytes, kindLabel } from "../lib/format";
+  import { t } from "../lib/i18n.svelte";
+  import type { Key } from "../lib/locales/pl";
+  import { ENGINE_MC } from "../lib/presets";
   import { app, openDiscover, toast, toastError } from "../lib/state.svelte";
   import type { ContentItem, ContentKind, ContentUpdate, Instance } from "../lib/types";
 
@@ -46,7 +51,11 @@
 
   const shown = $derived(items.filter((m) => !query || (m.meta?.title ?? m.file).toLowerCase().includes(query.toLowerCase())));
   const updateCount = $derived(Object.keys(updates).length);
+  // Put back at every launch (`patina_mod.rs`), so it has no switch and no delete button.
+  const builtIn = (m: ContentItem) => kind === "mod" && m.file === "patina-client.jar" && inst.loader === "fabric" && inst.mcVersion === ENGINE_MC;
   const modsBlocked = $derived(kind === "mod" && (inst.loader === "vanilla" || inst.loader === "rust"));
+  const kinds = $derived((["mod", "shader", "resourcepack"] as const).map((value) => ({ value, label: kindLabel(value) })));
+  const EMPTY: Record<ContentKind, Key> = { mod: "content.emptyMods", shader: "content.emptyShaders", resourcepack: "content.emptyPacks" };
 
   async function checkUpdates() {
     checking = true;
@@ -55,7 +64,7 @@
       const list = await api.checkUpdates(inst.id, k);
       if (k !== kind) return;
       updates = Object.fromEntries(list.map((u) => [u.file, { ...u, kind: k }]));
-      toast(list.length ? `Dostępne aktualizacje: ${list.length}` : "Wszystko aktualne", list.length ? "info" : "success");
+      toast(list.length ? t("content.updatesFound", { n: list.length }) : t("content.upToDate"), list.length ? "info" : "success");
     } catch (e) {
       toastError(e);
     } finally {
@@ -69,16 +78,19 @@
       await api.installContent(inst.id, u.kind, u.projectId, u.versionId);
       delete updates[u.file];
       if (u.kind === kind) await load(false);
+      return true;
     } catch (e) {
       toastError(e);
+      return false;
     } finally {
       delete busy[u.file];
     }
   }
 
   async function updateAll() {
-    for (const u of Object.values(updates)) await update(u);
-    toast("Zaktualizowano", "success");
+    let failed = 0;
+    for (const u of Object.values(updates)) if (!(await update(u))) failed++;
+    if (!failed) toast(t("content.updated"), "success");
   }
 
   async function toggle(m: ContentItem, on: boolean) {
@@ -95,19 +107,19 @@
     try {
       await api.deleteContent(inst.id, kind, m.file);
       items = items.filter((x) => x.file !== m.file);
-      toast(`Usunięto ${m.meta?.title ?? m.file} (do kosza)`);
+      toast(t("content.removed", { name: m.meta?.title ?? m.file }));
     } catch (e) {
       toastError(e);
     }
   }
 
   async function fromFile() {
-    const picked = await open({ multiple: true, title: `Dodaj: ${kindLabel(kind)}`, filters: [{ name: kindLabel(kind), extensions: [kind === "mod" ? "jar" : "zip"] }] });
+    const picked = await open({ multiple: true, title: t("content.addFiles", { kind: kindLabel(kind).toLowerCase() }), filters: [{ name: kindLabel(kind), extensions: [kind === "mod" ? "jar" : "zip"] }] });
     const paths = Array.isArray(picked) ? picked : picked ? [picked] : [];
     if (!paths.length) return;
     try {
       const names = await api.importContent(inst.id, kind, paths);
-      toast(`Dodano: ${names.join(", ")}`, "success");
+      toast(t("content.added", { names: names.join(", ") }), "success");
       await load(true);
     } catch (e) {
       toastError(e);
@@ -118,7 +130,7 @@
     perf = true;
     try {
       const names = await api.installPerformanceMods(inst.id);
-      toast(names.length ? `Zainstalowano: ${names.join(", ")}` : "Wszystkie mody już są albo nie ma ich dla tej wersji", "success", 6000);
+      toast(names.length ? t("content.perfInstalled", { names: names.join(", ") }) : t("content.perfNothing"), "success", 6000);
       await load(true);
     } catch (e) {
       toastError(e);
@@ -136,133 +148,101 @@
   }
 </script>
 
-<div class="kinds">
-  {#each ["mod", "shader", "resourcepack"] as const as k (k)}
-    <button class="kind" class:on={kind === k} onclick={() => (kind = k)}>{kindLabel(k)}</button>
-  {/each}
+<div class="bar">
+  <Segmented label={t("content.kind")} value={kind} options={kinds} onchange={(k) => (kind = k)} />
+  <span class="count">{t("content.enabledCount", { on: items.filter((m) => m.enabled).length, all: items.length })}</span>
+  <button class="btn sm push" onclick={() => openDiscover(kind, inst.id)} disabled={modsBlocked}><Compass size={14} /> {t("content.browse")}</button>
 </div>
 
 <div class="bar">
-  <input class="input" placeholder="Szukaj…" bind:value={query} />
-  <span class="dim count">{items.filter((m) => m.enabled).length}/{items.length} włączonych</span>
-  <div class="spacer"></div>
-  <button class="btn sm" onclick={() => load(true)} title="Odśwież"><RefreshCw size={14} /></button>
+  <SearchInput bind:value={query} placeholder={t("common.search")} width="200px" />
+  <button class="btn sm icon push" onclick={() => load(true)} title={t("common.refresh")} aria-label={t("common.refresh")}><RefreshCw size={14} /></button>
+  <button class="btn sm icon" title={t("content.openFolder")} aria-label={t("content.openFolder")} onclick={() => api.openFolder(inst.id, kind === "mod" ? "mods" : kind === "shader" ? "shaderpacks" : "resourcepacks").catch(toastError)}><FolderOpen size={14} /></button>
+  <button class="btn sm" onclick={fromFile} disabled={modsBlocked}><FilePlus size={14} /> {t("content.fromFile")}</button>
+  {#if kind === "mod" && !modsBlocked}
+    <button class="btn sm" disabled={perf} onclick={perfMods}><Gauge size={14} /> {t("content.perfMods")}</button>
+  {/if}
   <button class="btn sm" onclick={checkUpdates} disabled={checking || !items.length}>
-    {#if checking}<LoaderCircle size={14} class="spin" />{:else}<ArrowUpCircle size={14} />{/if} Aktualizacje
+    {#if checking}<LoaderCircle size={14} class="spin" />{:else}<ArrowUpCircle size={14} />{/if} {t("content.checkUpdates")}
   </button>
   {#if updateCount}
-    <button class="btn sm primary" onclick={updateAll}>Aktualizuj wszystko ({updateCount})</button>
+    <button class="btn sm primary" onclick={updateAll}>{t("content.updateAll", { n: updateCount })}</button>
   {/if}
-  <button class="btn sm" onclick={fromFile} disabled={modsBlocked}><FilePlus size={14} /> Z pliku</button>
-  <button class="btn sm" onclick={() => api.openFolder(inst.id, kind === "mod" ? "mods" : kind === "shader" ? "shaderpacks" : "resourcepacks").catch(toastError)}><FolderOpen size={14} /></button>
-  {#if kind === "mod" && !modsBlocked}
-    <button class="btn sm" disabled={perf} onclick={perfMods}><Sparkles size={14} /> Mody na FPS</button>
-  {/if}
-  <button class="btn sm primary" onclick={() => openDiscover(kind, inst.id)} disabled={modsBlocked}><Compass size={14} /> Przeglądaj</button>
 </div>
 
 {#if modsBlocked}
-  <div class="empty card">{inst.loader === "rust" ? "Silnik Rust nie uruchamia modów Fabric." : "Vanilla nie obsługuje modów."} Zmień loader na Fabric w ustawieniach instancji, aby je dodać. Paczki zasobów działają.</div>
+  <p class="empty">{t(inst.loader === "rust" ? "content.blockedRust" : "content.blockedVanilla")}</p>
 {:else if loading && !items.length}
-  <div class="empty card"><LoaderCircle size={22} class="spin" /></div>
+  <div class="empty"><LoaderCircle size={16} class="spin" /></div>
 {:else if shown.length === 0}
-  <div class="empty card">
-    <Package size={28} />
-    <p>{items.length ? "Brak wyników." : `Brak: ${kindLabel(kind).toLowerCase()}. Znajdź coś w przeglądarce albo dodaj plik.`}</p>
-    <button class="btn primary" onclick={() => openDiscover(kind, inst.id)}><Compass size={15} /> Przeglądaj {kindLabel(kind).toLowerCase()}</button>
+  <div class="empty">
+    <p>{items.length ? t("common.noResults") : t(EMPTY[kind])}</p>
+    {#if !items.length}<button class="btn primary" onclick={() => openDiscover(kind, inst.id)}><Compass size={14} /> {t("content.browse")}</button>{/if}
   </div>
 {:else}
-  <div class="list card">
+  <div class="list">
     {#each shown as m (m.file)}
       {@const up = updates[m.file]}
       <div class="row" class:off={!m.enabled}>
-        <Toggle checked={m.enabled} onchange={(v) => toggle(m, v)} />
-        {#if m.meta?.iconUrl}<img src={m.meta.iconUrl} alt="" loading="lazy" />{:else}<span class="ph"><Package size={16} /></span>{/if}
+        <Toggle label={m.meta?.title ?? m.file} checked={m.enabled} disabled={builtIn(m)} onchange={(v) => toggle(m, v)} />
+        {#if m.meta?.iconUrl}<img src={m.meta.iconUrl} alt="" loading="lazy" />{:else}<span class="ph"><Package size={14} /></span>{/if}
         <button class="info" onclick={() => m.meta && changeVersion(m, "about")} disabled={!m.meta}>
-          <b>{m.meta?.title ?? m.file}</b>
-          <small class="dim mono">{m.meta ? m.meta.versionNumber : "plik lokalny"} · {bytes(m.size)}</small>
+          <b>{builtIn(m) ? "Patina Client" : (m.meta?.title ?? m.file)}</b>
+          <small class="mono">{builtIn(m) ? t("content.builtIn") : m.meta ? m.meta.versionNumber : t("content.localFile")} · {bytes(m.size)}</small>
         </button>
         {#if up}
-          <button class="btn sm primary" disabled={busy[m.file]} onclick={() => update(up)} title="Aktualizuj do {up.versionNumber}">
-            {#if busy[m.file]}<LoaderCircle size={13} class="spin" />{:else}<ArrowUpCircle size={13} />{/if} {up.versionNumber}
+          <button class="btn sm" disabled={busy[m.file]} onclick={() => update(up)} title={t("content.updateTo", { version: up.versionNumber })}>
+            {#if busy[m.file]}<LoaderCircle size={14} class="spin" />{:else}<ArrowUpCircle size={14} />{/if} <span class="to">{up.versionNumber}</span>
           </button>
         {/if}
         {#if m.meta}
-          <button class="btn ghost sm icon" title="Zmień wersję" onclick={() => changeVersion(m)}><Replace size={14} /></button>
+          <button class="btn ghost sm icon" title={t("content.changeVersion")} aria-label={t("content.changeVersion")} onclick={() => changeVersion(m)}><Replace size={14} /></button>
         {/if}
-        <button class="btn ghost sm icon danger" title="Usuń" onclick={() => remove(m)}><Trash2 size={14} /></button>
+        {#if !builtIn(m)}
+          <button class="btn ghost sm icon danger" title={t("common.delete")} aria-label={t("common.delete")} onclick={() => remove(m)}><Trash2 size={14} /></button>
+        {/if}
       </div>
     {/each}
   </div>
 {/if}
 
 <style>
-  .kinds {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 10px;
-  }
-  .kind {
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 0.88rem;
-    color: var(--text-2);
-    border: 1px solid var(--border);
-    background: var(--panel);
-  }
-  .kind.on {
-    color: var(--text);
-    border-color: var(--accent-line);
-    background: var(--accent-soft);
-  }
   .bar {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 10px;
     flex-wrap: wrap;
-  }
-  .bar .input {
-    height: 32px;
-    max-width: 240px;
+    margin-bottom: 8px;
   }
   .count {
-    font-size: 0.85rem;
+    margin-left: 4px;
+    color: var(--text-3);
+    font-size: var(--fs-12);
   }
-  .spacer {
-    flex: 1;
-  }
-  .list {
-    padding: 4px;
-  }
+  .push { margin-left: auto; }
+  .list { border-top: 1px solid var(--border); margin-top: 4px; }
   .row {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 7px 10px;
-    border-radius: 9px;
-    transition: background 0.15s;
+    min-height: 48px;
+    border-bottom: 1px solid var(--border);
   }
-  .row:hover {
-    background: var(--panel-2);
-  }
+  .row:last-child { border-bottom: 0; }
   .row img,
   .ph {
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    object-fit: cover;
+    width: 32px;
+    height: 32px;
     flex-shrink: 0;
-    background: var(--panel-3);
     display: grid;
     place-items: center;
+    border-radius: var(--radius-s);
+    object-fit: cover;
+    background: var(--panel-2);
     color: var(--text-3);
   }
   .row.off img,
-  .row.off .info {
-    opacity: 0.45;
-  }
+  .row.off .info { opacity: 0.5; }
   .info {
     flex: 1;
     min-width: 0;
@@ -270,28 +250,37 @@
     flex-direction: column;
     text-align: left;
   }
+  .info:disabled { cursor: default; }
   .info b {
-    font-weight: 600;
+    font-size: var(--fs-13);
+    font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .info small {
-    font-size: 0.76rem;
-    margin-top: 1px;
+    color: var(--text-3);
+    font-size: var(--fs-12);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .to {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .empty {
-    padding: 34px;
-    text-align: center;
-    color: var(--text-2);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
-  }
-  .empty p {
     margin: 0;
-    max-width: 460px;
+    padding: 32px 16px;
+    color: var(--text-3);
+    font-size: var(--fs-13);
     line-height: 1.5;
+    text-align: center;
   }
+  .empty p { margin: 0; }
 </style>

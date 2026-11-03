@@ -1,38 +1,55 @@
 <script lang="ts">
-  import { fly } from "svelte/transition";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { Check, FolderOpen, LoaderCircle, LogOut, Plus } from "@lucide/svelte";
-  import Row from "../components/Row.svelte";
-  import Toggle from "../components/Toggle.svelte";
-  import MemorySlider from "../components/MemorySlider.svelte";
+  import Group from "../components/Group.svelte";
   import Head from "../components/Head.svelte";
-  import Modal from "../components/Modal.svelte";
-  import LoginPanel from "../components/LoginPanel.svelte";
   import ImagePicker from "../components/ImagePicker.svelte";
+  import MemorySlider from "../components/MemorySlider.svelte";
+  import NumberInput from "../components/NumberInput.svelte";
+  import Row from "../components/Row.svelte";
+  import Segmented from "../components/Segmented.svelte";
+  import Select from "../components/Select.svelte";
   import ThemePicker from "../components/ThemePicker.svelte";
+  import Toggle from "../components/Toggle.svelte";
   import { api } from "../lib/api";
+  import { bytes, relativeTime } from "../lib/format";
+  import { t } from "../lib/i18n.svelte";
+  import type { Key } from "../lib/locales/pl";
+  import { indicator, page } from "../lib/motion";
   import { ACCENTS, LOADERS } from "../lib/presets";
-  import { app, dur, flushSettings, refreshAccounts, toast, toastError, updateSettings } from "../lib/state.svelte";
+  import { app, flushSettings, refreshAccounts, toast, toastError, updateSettings, type SettingsSection } from "../lib/state.svelte";
   import type { EngineSettings, JavaInstall, Settings } from "../lib/types";
+  import { PATINA_DEV } from "../lib/flavour";
+  import { checkNow, install, RELEASES_URL, updates } from "../lib/updates.svelte";
 
-  const sections = [
-    { id: "look", label: "Wygląd" },
-    { id: "game", label: "Gra" },
-    { id: "engine", label: "Silnik Rust" },
-    { id: "java", label: "Java" },
-    { id: "launcher", label: "Launcher" },
-    { id: "linux", label: "Zaawansowane" },
-    { id: "accounts", label: "Konta" },
-    { id: "about", label: "O programie" },
-  ] as const;
-  let section = $state<(typeof sections)[number]["id"]>("look");
+  const groups: { title: Key | ""; items: { id: SettingsSection; label: Key }[] }[] = [
+    { title: "settings.groupLauncher", items: [{ id: "general", label: "settings.general" }, { id: "look", label: "settings.look" }] },
+    { title: "settings.groupGame", items: [{ id: "game", label: "settings.game" }, { id: "engine", label: "settings.engine" }, { id: "java", label: "settings.java" }, { id: "advanced", label: "settings.advanced" }] },
+    { title: "settings.groupAccount", items: [{ id: "accounts", label: "settings.accounts" }] },
+  ];
+  const titles = Object.fromEntries(groups.flatMap((g) => g.items).map((i) => [i.id, i.label])) as Record<string, Key>;
+  const section = $derived(app.settingsSection);
+  const title = $derived(t(titles[section] ?? "settings.about"));
 
   const s = $derived(app.settings!);
   const set = <K extends keyof Settings>(k: K) => (v: Settings[K]) => updateSettings({ [k]: v } as Partial<Settings>);
-
   const e = $derived(s.rustEngine);
   const setEngine = (patch: Partial<EngineSettings>) => updateSettings({ rustEngine: { ...e, ...patch } });
-  const num = (ev: { currentTarget: HTMLSelectElement }) => (ev.currentTarget.value === "" ? null : +ev.currentTarget.value);
-  const flag = (v: string) => (v === "" ? null : v === "on");
+
+  const onOff = $derived([{ value: "", label: t("engine.asGame") }, { value: "on", label: t("common.on") }, { value: "off", label: t("common.off") }]);
+  const triple = (key: "hdr" | "batteryMode" | "fpsOverlay") => (e[key] === null ? "" : e[key] ? "on" : "off");
+  const setTriple = (key: "hdr" | "batteryMode" | "fpsOverlay") => (v: string) => setEngine({ [key]: v === "" ? null : v === "on" });
+  const numeric = (key: "lodDistance" | "resolutionScale") => (v: string) => setEngine({ [key]: v === "" ? null : +v });
+  const lodOptions = $derived([
+    { value: "", label: t("engine.asGame") }, { value: "0", label: t("common.off") },
+    ...[64, 128, 256, 512, 1024].map((d) => ({ value: String(d), label: t("engine.chunks", { n: d }) })),
+  ]);
+  const scaleOptions = $derived([{ value: "", label: t("engine.asGame") }, ...[50, 75, 100, 125, 150, 200].map((p) => ({ value: String(p), label: `${p}%` }))]);
+
+  // The start heap can never exceed the maximum: lowering one pulls the other along.
+  const memoryOptions = $derived([512, 1024, 2048, 4096].filter((m) => m <= s.memoryMaxMb).map((m) => ({ value: String(m), label: m >= 1024 ? `${m / 1024} GB` : `${m} MB` })));
+  const setMaxMemory = (v: number) => updateSettings(s.memoryMinMb > v ? { memoryMaxMb: v, memoryMinMb: v } : { memoryMaxMb: v });
+  const minMemoryValue = $derived(memoryOptions.some((o) => o.value === String(s.memoryMinMb)) ? String(s.memoryMinMb) : memoryOptions[memoryOptions.length - 1]?.value ?? "512");
 
   let javas = $state<JavaInstall[] | null>(null);
   let scanning = $state(false);
@@ -40,547 +57,382 @@
     scanning = true;
     try {
       javas = await api.detectJava();
-    } catch (e) {
-      toastError(e);
+    } catch (error) {
+      toastError(error);
     } finally {
       scanning = false;
     }
   }
 
-  let addAccount = $state(false);
   async function logout(uuid: string) {
     try {
       app.accounts = await api.removeAccount(uuid);
       await refreshAccounts();
-    } catch (e) {
-      toastError(e);
+    } catch (error) {
+      toastError(error);
     }
   }
+
+  const updateStatus = $derived.by(() => {
+    if (updates.checking) return t("update.checking");
+    if (updates.checkError) return updates.checkError;
+    if (updates.info) return t("update.availableVersion", { version: updates.info.version, size: bytes(updates.info.sizeBytes) });
+    return updates.checked ? t("update.upToDate") : t("update.notChecked");
+  });
 </script>
 
-{#snippet triple(key: "hdr" | "batteryMode" | "fpsOverlay")}
-  <select class="input pick" value={e[key] === null ? "" : e[key] ? "on" : "off"} onchange={(ev) => setEngine({ [key]: flag(ev.currentTarget.value) })}>
-    <option value="">Jak w grze</option>
-    <option value="on">Włączone</option>
-    <option value="off">Wyłączone</option>
-  </select>
-{/snippet}
-
-<div class="page">
-  <header class="settings-head"><h1>Ustawienia</h1><div class="save-state" aria-live="polite">
-    {#if app.settingsSave === "error"}<button class="retry" onclick={() => flushSettings().catch(() => {})}>Błąd zapisu · ponów</button>
-    {:else if app.settingsSave === "pending"}Zapisywanie…{:else}Zapisano automatycznie{/if}
-  </div></header>
-  <nav class="tabs" aria-label="Kategorie ustawień">
-    {#each sections as sec (sec.id)}
-      <button class:on={section === sec.id} aria-current={section === sec.id ? "page" : undefined} onclick={() => (section = sec.id)}>{sec.label}</button>
+<div class="settings">
+  <nav aria-label={t("settings.title")} use:indicator={section}>
+    <span class="nav-indicator" data-indicator></span>
+    {#each groups as group (group.title)}
+      <div class="nav-label">{t(group.title as Key)}</div>
+      {#each group.items as item (item.id)}
+        <button class="nav-item" aria-current={section === item.id ? "page" : undefined} onclick={() => (app.settingsSection = item.id)}>{t(item.label)}</button>
+      {/each}
     {/each}
+    <button class="nav-item about-link" aria-current={section === "about" ? "page" : undefined} onclick={() => (app.settingsSection = "about")}>{t("settings.about")}</button>
   </nav>
 
   {#key section}
-    <section class="content" in:fly={{ y: 8, duration: dur(220) }}>
+    <div class="pane" in:page>
       <div class="column">
-      {#if section === "look"}
-        <h2 class="look-title">Twój styl, mniej rozpraszaczy.</h2>
-        <p class="look-desc muted">Wybierz paletę. Resztę dopasujesz, jeśli zechcesz.</p>
-        <ThemePicker />
-        <div class="card block">
-          <Row title="Tryb kolorów">
-            <div class="seg">
-              {#each [["dark", "Ciemny"], ["light", "Jasny"], ["system", "Systemowy"]] as [k, l] (k)}
-                <button class:on={s.theme === k} aria-pressed={s.theme === k} onclick={() => updateSettings({ theme: k as Settings["theme"] })}>{l}</button>
-              {/each}
-            </div>
-          </Row>
-        </div>
-        <details class="appearance-details">
-          <summary>Dostosuj interfejs</summary>
-          <div class="card block">
-          <Row title="Kolor akcentu">
-            <div class="accents">
-              {#each ACCENTS as c (c)}
-                <button class="sw" class:on={s.accent === c} style:background={c} aria-label={c} onclick={() => updateSettings({ accent: c })}>
-                  {#if s.accent === c}<Check size={13} />{/if}
-                </button>
-              {/each}
-              <label class="sw custom" title="Własny kolor">
-                <input type="color" aria-label="Własny kolor akcentu" value={s.accent} oninput={(e) => updateSettings({ accent: e.currentTarget.value })} />
-                <Plus size={13} />
-              </label>
-            </div>
-          </Row>
-          <Row title="Animacje" desc="Płynne przejścia między ekranami i elementami."><Toggle label="Animacje" checked={s.animations} onchange={set("animations")} /></Row>
-          <Row title="Efekt rozmycia" desc="Szkło pod menu i oknami. Wyłącz na słabszym sprzęcie."><Toggle label="Efekt rozmycia" checked={s.blur} onchange={set("blur")} /></Row>
-          <Row title="Skala interfejsu">
-            <div class="scale">
-              <input type="range" min="0.8" max="1.25" step="0.05" value={s.uiScale} oninput={(e) => updateSettings({ uiScale: +e.currentTarget.value })} />
-              <span class="mono">{Math.round(s.uiScale * 100)}%</span>
-            </div>
-          </Row>
-          <Row title="Czcionka">
-            <div class="seg">
-              {#each [["inter", "Inter"], ["outfit", "Outfit"], ["system", "Systemowa"], ["mono", "Mono"]] as [k, l] (k)}
-                <button class:on={s.font === k} onclick={() => updateSettings({ font: k as Settings["font"] })}>{l}</button>
-              {/each}
-            </div>
-          </Row>
-          <Row title="Zaokrąglenia">
-            <div class="seg">
-              {#each [["sharp", "Ostre"], ["normal", "Normalne"], ["round", "Okrągłe"]] as [k, l] (k)}
-                <button class:on={s.radius === k} onclick={() => updateSettings({ radius: k as Settings["radius"] })}>{l}</button>
-              {/each}
-            </div>
-          </Row>
-          <Row title="Tryb kompaktowy" desc="Mniejsze odstępy i czcionka — więcej się mieści."><Toggle label="Tryb kompaktowy" checked={s.compact} onchange={set("compact")} /></Row>
-        </div>
+        <header>
+          <h1 class="page-title">{title}</h1>
+          {#if app.settingsSave === "error"}
+            <button class="save error" onclick={() => flushSettings().catch(() => {})}>{t("settings.saveFailed")}</button>
+          {:else if app.settingsSave === "pending"}
+            <span class="save" aria-live="polite">{t("settings.saving")}</span>
+          {/if}
+        </header>
 
-        </details>
-        <details class="appearance-details">
-          <summary>Ekran startowy i postać</summary>
-        <div class="card block">
-          <Row title="Kinowe tło" desc="Animowane tło wioski. Wyłącz, aby używać tapety i zmniejszyć obciążenie.">
-            <Toggle label="Kinowe tło" checked={s.heroScene} onchange={set("heroScene")} />
-          </Row>
-          <Row title="Tapeta" desc="Tło za postacią na stronie startowej. „Baner instancji” bierze tło wybranej instancji." stacked>
-            <ImagePicker value={s.heroWallpaper} noneLabel="Baner instancji" onchange={(v) => updateSettings({ heroWallpaper: v, heroScene: false })} />
-          </Row>
-          <Row title="Przyciemnienie tapety">
-            <div class="scale">
-              <input type="range" min="0" max="80" value={s.heroDim} oninput={(e) => updateSettings({ heroDim: +e.currentTarget.value })} />
-              <span class="mono">{s.heroDim}%</span>
-            </div>
-          </Row>
-          <Row title="Pozycja postaci">
-            <div class="seg">
-              {#each [["left", "Lewo"], ["center", "Środek"], ["right", "Prawo"]] as [k, l] (k)}
-                <button class:on={s.modelPosition === k} onclick={() => updateSettings({ modelPosition: k as Settings["modelPosition"] })}>{l}</button>
-              {/each}
-            </div>
-          </Row>
-          <Row title="Głowa podąża za kursorem"><Toggle label="Głowa podąża za kursorem" checked={s.followCursor} onchange={set("followCursor")} /></Row>
-          <Row title="Plakietka z nickiem"><Toggle label="Plakietka z nickiem" checked={s.showNametag} onchange={set("showNametag")} /></Row>
-        </div>
-
-        </details>
-        <details class="appearance-details">
-          <summary>Tapeta launchera</summary>
-        <div class="card block">
-          <Row title="Tapeta launchera" desc="Obraz za całym interfejsem." stacked>
-            <ImagePicker value={s.appWallpaper} noneLabel="Brak" onchange={(v) => updateSettings({ appWallpaper: v })} />
-          </Row>
-          {#if s.appWallpaper}
-            <Row title="Przyciemnienie" desc="Im więcej, tym czytelniejszy tekst.">
-              <div class="scale">
-                <input type="range" min="0" max="95" value={s.appWallpaperDim} oninput={(e) => updateSettings({ appWallpaperDim: +e.currentTarget.value })} />
-                <span class="mono">{s.appWallpaperDim}%</span>
+        {#if section === "general"}
+          <Group title={t("general.language")}>
+            <Row title={t("general.languageRow")}>
+              <Segmented label={t("general.languageRow")} value={s.language === "pl" || s.language === "en" ? s.language : ""}
+                options={[{ value: "pl", label: "Polski" }, { value: "en", label: "English" }, { value: "", label: t("general.system") }]}
+                onchange={(language) => updateSettings({ language })} />
+            </Row>
+          </Group>
+          <Group title={t("general.launch")}>
+            <Row title={t("general.afterStart")}>
+              <Select label={t("general.afterStart")} value={s.onLaunch} onchange={set("onLaunch")} width={200} options={[
+                { value: "hide", label: t("general.onLaunchHide") }, { value: "minimize", label: t("general.onLaunchMinimize") },
+                { value: "keep", label: t("general.onLaunchKeep") }, { value: "close", label: t("general.onLaunchClose") },
+              ]} />
+            </Row>
+            <Row title={t("general.reopen")}><Toggle label={t("general.reopen")} checked={s.reopenOnExit} onchange={set("reopenOnExit")} /></Row>
+            <Row title={t("general.console")}><Toggle label={t("general.console")} checked={s.openConsoleOnLaunch} onchange={set("openConsoleOnLaunch")} /></Row>
+          </Group>
+          <Group title={t("general.downloads")}>
+            <Row title={t("general.parallel")} desc={t("general.parallelDesc")}>
+              <div class="range">
+                <input type="range" min="2" max="48" step="1" aria-label={t("general.parallel")} value={s.maxConcurrentDownloads} oninput={(ev) => updateSettings({ maxConcurrentDownloads: +ev.currentTarget.value })} />
+                <span class="mono">{s.maxConcurrentDownloads}</span>
               </div>
             </Row>
-          {/if}
-        </div>
-        </details>
-      {:else if section === "game"}
-        <div class="card block">
-          <Row title="Rozdzielczość okna gry">
-            <input class="input num" type="number" min="320" value={s.gameWidth} onchange={(e) => updateSettings({ gameWidth: +e.currentTarget.value })} />
-            <span class="dim">×</span>
-            <input class="input num" type="number" min="240" value={s.gameHeight} onchange={(e) => updateSettings({ gameHeight: +e.currentTarget.value })} />
-          </Row>
-          <Row title="Pełny ekran" desc="Uruchamiaj grę od razu na pełnym ekranie."><Toggle label="Pełny ekran" checked={s.fullscreen} onchange={set("fullscreen")} /></Row>
-        </div>
-        <h3 class="sub">Nowe instancje</h3>
-        <div class="card block">
-          <Row title="Domyślny loader">
-            <div class="seg">
-              {#each LOADERS as l (l.id)}
-                <button class:on={s.defaultLoader === l.id} onclick={() => updateSettings({ defaultLoader: l.id })}>{l.label}</button>
-              {/each}
-            </div>
-          </Row>
-          <Row title="Instaluj mody optymalizacyjne" desc="Sodium, Lithium, FerriteCore, ImmediatelyFast, Entity Culling, Mod Menu i Fabric API przy pierwszym uruchomieniu instancji Fabric/Quilt.">
-            <Toggle label="Instaluj mody optymalizacyjne" checked={s.installPerformanceMods} onchange={set("installPerformanceMods")} />
-          </Row>
-          <Row title="Pokazuj snapshoty"><Toggle label="Pokazuj snapshoty" checked={s.showSnapshots} onchange={set("showSnapshots")} /></Row>
-          <Row title="Pokazuj stare wersje (beta/alpha)"><Toggle label="Pokazuj stare wersje (beta/alpha)" checked={s.showOldVersions} onchange={set("showOldVersions")} /></Row>
-        </div>
-      {:else if section === "engine"}
-        <p class="muted lead">Dotyczy instancji z loaderem Rust. „Jak w grze” zostawia to, co ustawisz w menu gry. Launcher zapisuje wybrane wartości przy każdym uruchomieniu.</p>
-        <h3 class="sub">Wydajność</h3>
-        <div class="card block">
-          <Row title="Uruchamiaj przez XWayland" desc="Znacznie więcej FPS na laptopach z NVIDIA i Intelem, na których Wayland spowalnia przekazywanie klatek do ekranu."><Toggle label="Uruchamiaj przez XWayland" checked={e.xwayland} onchange={(v) => setEngine({ xwayland: v })} /></Row>
-        </div>
-        <h3 class="sub">Grafika</h3>
-        <div class="card block">
-          <Row title="Daleki teren (LOD)" desc="Uproszczony teren poza zasięgiem renderowania.">
-            <select class="input pick" value={String(e.lodDistance ?? "")} onchange={(ev) => setEngine({ lodDistance: num(ev) })}>
-              <option value="">Jak w grze</option>
-              <option value="0">Wyłączony</option>
-              {#each [64, 128, 256, 512, 1024] as d (d)}<option value={String(d)}>{d} chunków</option>{/each}
-            </select>
-          </Row>
-          <Row title="Skala rozdzielczości" desc="Poniżej 100% szybciej, powyżej ostrzej.">
-            <select class="input pick" value={String(e.resolutionScale ?? "")} onchange={(ev) => setEngine({ resolutionScale: num(ev) })}>
-              <option value="">Jak w grze</option>
-              {#each [50, 75, 100, 125, 150, 200] as p (p)}<option value={String(p)}>{p}%</option>{/each}
-            </select>
-          </Row>
-          <Row title="Wygładzanie krawędzi">
-            <select class="input pick" value={e.antialiasing} onchange={(ev) => setEngine({ antialiasing: ev.currentTarget.value as EngineSettings["antialiasing"] })}>
-              <option value="game">Jak w grze</option>
-              <option value="off">Wyłączone</option>
-              <option value="fxaa">FXAA</option>
-              <option value="taa">TAA</option>
-            </select>
-          </Row>
-          <Row title="API graficzne" desc="Na Linuksie domyślnie Vulkan, OpenGL 3.3 jako zapas.">
-            <select class="input pick" value={e.graphicsApi} onchange={(ev) => setEngine({ graphicsApi: ev.currentTarget.value as EngineSettings["graphicsApi"] })}>
-              <option value="game">Jak w grze</option>
-              <option value="auto">Automatycznie</option>
-              <option value="vulkan">Vulkan</option>
-              <option value="opengl">OpenGL</option>
-            </select>
-          </Row>
-          <Row title="HDR" desc="Wymaga monitora i kompozytora z HDR.">{@render triple("hdr")}</Row>
-          <Row title="Tryb baterii" desc="Do 60 FPS w świecie i mniej wątków. Dla laptopów na baterii.">{@render triple("batteryMode")}</Row>
-          <Row title="Licznik FPS" desc="Nakładka silnika z liczbą klatek.">{@render triple("fpsOverlay")}</Row>
-        </div>
-      {:else if section === "java"}
-        <div class="card block">
-          <Row title="Maksymalna pamięć (RAM)" desc={`Twój komputer ma ${((app.info?.totalMemoryMb ?? 0) / 1024).toFixed(1)} GB. Dla modów zwykle wystarcza 4–6 GB.`}>
-            <MemorySlider value={s.memoryMaxMb} onchange={(v) => updateSettings({ memoryMaxMb: v })} />
-          </Row>
-          <Row title="Pamięć początkowa">
-            <select class="input" style="width: 140px" value={String(s.memoryMinMb)} onchange={(e) => updateSettings({ memoryMinMb: +e.currentTarget.value })}>
-              {#each [512, 1024, 2048, 4096] as m (m)}<option value={String(m)}>{m >= 1024 ? `${m / 1024} GB` : `${m} MB`}</option>{/each}
-            </select>
-          </Row>
-          <Row title="Zoptymalizowane argumenty JVM" desc="G1GC dostrojony pod Minecrafta — mniej przycięć przy zbieraniu śmieci."><Toggle label="Zoptymalizowane argumenty JVM" checked={s.optimizedJvmArgs} onchange={set("optimizedJvmArgs")} /></Row>
-          <Row title="Własne argumenty JVM" stacked>
-            <input class="input mono" placeholder="np. -XX:+UseZGC" value={s.jvmArgs} onchange={(e) => updateSettings({ jvmArgs: e.currentTarget.value })} />
-          </Row>
-          <Row title="Java" desc="Domyślnie launcher sam pobiera właściwą Javę (8/17/21/25) dla każdej wersji gry." stacked>
-            <div class="java">
-              <input class="input mono" placeholder="Automatycznie (zalecane)" value={s.javaPath} onchange={(e) => updateSettings({ javaPath: e.currentTarget.value.trim() })} />
-              <button class="btn" onclick={scanJava} disabled={scanning}>{#if scanning}<LoaderCircle size={15} class="spin" />{/if} Wykryj</button>
-              {#if s.javaPath}<button class="btn ghost" onclick={() => updateSettings({ javaPath: "" })}>Automatycznie</button>{/if}
-            </div>
-            {#if javas}
-              <div class="javas">
-                {#each javas as j (j.path)}
-                  <button class="jv" class:on={s.javaPath === j.path} onclick={() => updateSettings({ javaPath: j.path })}>
-                    <span class="chip accent">Java {j.major}</span>
-                    <span class="mono path">{j.path}</span>
-                    <span class="dim">{j.source === "bundled" ? "pobrana" : "systemowa"}</span>
-                  </button>
-                {:else}
-                  <div class="dim">Nie znaleziono Javy w systemie — to nic, launcher pobierze ją sam.</div>
-                {/each}
-              </div>
+          </Group>
+          <Group title={t("update.title")}>
+            <Row title={t("update.version")}><span class="value mono">{app.info?.version}</span></Row>
+            {#if PATINA_DEV}
+              <Row title={t("update.status")}><span class="value">{t("update.devOff")}</span></Row>
+            {:else}
+              <Row title={t("update.lastCheck")}><span class="value">{updates.lastCheck ? relativeTime(updates.lastCheck) : t("time.never")}</span></Row>
+              <Row title={t("update.status")} desc={updateStatus}>
+                {#if updates.info?.installable}
+                  <button class="btn primary" onclick={install}>{t("update.install")}</button>
+                {:else if updates.info}
+                  <button class="btn" onclick={() => openUrl(RELEASES_URL).catch(toastError)}>{t("update.openReleases")}</button>
+                {/if}
+                <button class="btn" disabled={updates.checking} onclick={checkNow}>
+                  {#if updates.checking}<LoaderCircle size={14} class="spin" />{/if} {t("update.check")}
+                </button>
+              </Row>
             {/if}
-          </Row>
-        </div>
-      {:else if section === "launcher"}
-        <div class="card block">
-          <Row title="Po uruchomieniu gry" desc="Co ma zrobić launcher, gdy gra wystartuje.">
-            <select class="input" style="width: 220px" value={s.onLaunch} onchange={(e) => updateSettings({ onLaunch: e.currentTarget.value as Settings["onLaunch"] })}>
-              <option value="hide">Ukryj launcher</option>
-              <option value="minimize">Zminimalizuj</option>
-              <option value="keep">Zostaw otwarty</option>
-              <option value="close">Zamknij launcher</option>
-            </select>
-          </Row>
-          <Row title="Pokaż launcher po zamknięciu gry"><Toggle label="Pokaż launcher po zamknięciu gry" checked={s.reopenOnExit} onchange={set("reopenOnExit")} /></Row>
-          <Row title="Otwieraj konsolę przy starcie gry"><Toggle label="Otwieraj konsolę przy starcie gry" checked={s.openConsoleOnLaunch} onchange={set("openConsoleOnLaunch")} /></Row>
-          <Row title="Równoległe pobieranie" desc="Ile plików pobierać naraz.">
-            <div class="scale">
-              <input type="range" min="2" max="48" step="1" value={s.maxConcurrentDownloads} oninput={(e) => updateSettings({ maxConcurrentDownloads: +e.currentTarget.value })} />
-              <span class="mono">{s.maxConcurrentDownloads}</span>
-            </div>
-          </Row>
-        </div>
-      {:else if section === "linux"}
-        <div class="card block">
-          <Row title="Feral GameMode" desc="Uruchamia grę przez gamemoderun (pakiet gamemode)."><Toggle label="Feral GameMode" checked={s.gamemode} onchange={set("gamemode")} /></Row>
-          <Row title="MangoHud" desc="Nakładka z FPS i obciążeniem (pakiet mangohud)."><Toggle label="MangoHud" checked={s.mangohud} onchange={set("mangohud")} /></Row>
-          <Row title="Dedykowana karta graficzna" desc="PRIME offload: na laptopach z dwiema kartami gra użyje mocniejszej (NVIDIA/AMD)."><Toggle label="Dedykowana karta graficzna" checked={s.discreteGpu} onchange={set("discreteGpu")} /></Row>
-          <Row title="Komenda opakowująca" desc="Doklejana przed java, np. prime-run albo obs-gamecapture.">
-            <input class="input mono" style="width: 260px" placeholder="brak" value={s.wrapperCommand} onchange={(e) => updateSettings({ wrapperCommand: e.currentTarget.value })} />
-          </Row>
-          <Row title="Zmienne środowiskowe" desc="Jedna na linię: KLUCZ=wartość." stacked>
-            <textarea class="input" rows="3" placeholder="__GL_THREADED_OPTIMIZATIONS=0" value={s.envVars} onchange={(e) => updateSettings({ envVars: e.currentTarget.value })}></textarea>
-          </Row>
-          <Row title="Komenda przed uruchomieniem" desc="Wykonywana w folderze instancji (sh -c). Błąd przerywa start." stacked>
-            <input class="input mono" placeholder="brak" value={s.preLaunchCommand} onchange={(e) => updateSettings({ preLaunchCommand: e.currentTarget.value })} />
-          </Row>
-          <Row title="Komenda po zamknięciu gry" stacked>
-            <input class="input mono" placeholder="brak" value={s.postExitCommand} onchange={(e) => updateSettings({ postExitCommand: e.currentTarget.value })} />
-          </Row>
-        </div>
-      {:else if section === "accounts"}
-        <div class="card block">
-          {#each app.accounts as a (a.uuid)}
-            <div class="acc">
-              <Head skinUrl={a.skinUrl} name={a.name} size={36} radius={9} />
-              <div class="acc-text">
-                <b>{a.name}</b>
-                <small class="dim mono">{a.uuid}</small>
+          </Group>
+        {:else if section === "look"}
+          <Group title={t("look.palette")}>
+            <ThemePicker />
+            <Row title={t("look.mode")}>
+              <Segmented label={t("look.mode")} value={s.theme} onchange={set("theme")} options={[{ value: "dark", label: t("look.dark") }, { value: "light", label: t("look.light") }, { value: "system", label: t("general.system") }]} />
+            </Row>
+            <Row title={t("look.accent")} stacked>
+              <div class="accents">
+                {#each ACCENTS as colour (colour)}
+                  <button class="sw" style:background={colour} aria-label={colour} aria-pressed={s.accent === colour} onclick={() => updateSettings({ accent: colour })}>
+                    {#if s.accent === colour}<Check size={14} />{/if}
+                  </button>
+                {/each}
+                <label class="sw custom" class:on={!ACCENTS.includes(s.accent)} title={t("look.customAccent")}>
+                  <input type="color" aria-label={t("look.customAccent")} value={s.accent} oninput={(ev) => updateSettings({ accent: ev.currentTarget.value })} />
+                  <Plus size={14} />
+                </label>
               </div>
-              {#if a.active}
-                <span class="chip accent">Aktywne</span>
-              {:else}
-                <button class="btn sm" onclick={() => api.setActiveAccount(a.uuid).then((l) => (app.accounts = l)).catch(toastError)}>Ustaw aktywne</button>
+            </Row>
+          </Group>
+          <Group title={t("look.interface")}>
+            <Row title={t("look.animations")}><Toggle label={t("look.animations")} checked={s.animations} onchange={set("animations")} /></Row>
+            <Row title={t("look.scale")}>
+              <div class="range">
+                <input type="range" min="0.8" max="1.25" step="0.05" aria-label={t("look.scale")} value={s.uiScale} oninput={(ev) => updateSettings({ uiScale: +ev.currentTarget.value })} />
+                <span class="mono">{Math.round(s.uiScale * 100)}%</span>
+              </div>
+            </Row>
+            <Row title={t("look.font")}>
+              <Segmented label={t("look.font")} value={s.font} onchange={set("font")} options={[{ value: "inter", label: "Inter" }, { value: "outfit", label: "Outfit" }, { value: "system", label: t("general.system") }, { value: "mono", label: "Mono" }]} />
+            </Row>
+            <Row title={t("look.radius")}>
+              <Segmented label={t("look.radius")} value={s.radius} onchange={set("radius")} options={[{ value: "sharp", label: t("look.radiusSharp") }, { value: "normal", label: t("look.radiusNormal") }, { value: "round", label: t("look.radiusRound") }]} />
+            </Row>
+            <Row title={t("look.compact")}><Toggle label={t("look.compact")} checked={s.compact} onchange={set("compact")} /></Row>
+          </Group>
+          <Group title={t("look.home")}>
+            <Row title={t("look.followCursor")}><Toggle label={t("look.followCursor")} checked={s.followCursor} onchange={set("followCursor")} /></Row>
+            <Row title={t("look.nametag")}><Toggle label={t("look.nametag")} checked={s.showNametag} onchange={set("showNametag")} /></Row>
+            <Row title={t("look.homeWallpaper")} stacked>
+              <ImagePicker value={s.heroWallpaper} noneLabel={t("look.instanceBanner")} onchange={(v) => updateSettings({ heroWallpaper: v })} />
+            </Row>
+          </Group>
+          <Group title={t("look.appWallpaper")}>
+            <Row title={t("look.appWallpaperRow")} stacked>
+              <ImagePicker value={s.appWallpaper} onchange={(v) => updateSettings({ appWallpaper: v })} />
+            </Row>
+          </Group>
+        {:else if section === "game"}
+          <Group title={t("game.window")}>
+            <Row title={t("game.resolution")}>
+              <NumberInput label={t("game.width")} min={320} max={15360} value={s.gameWidth} onchange={set("gameWidth")} />
+              <span class="dim">×</span>
+              <NumberInput label={t("game.height")} min={240} max={8640} value={s.gameHeight} onchange={set("gameHeight")} />
+            </Row>
+            <Row title={t("game.fullscreen")}><Toggle label={t("game.fullscreen")} checked={s.fullscreen} onchange={set("fullscreen")} /></Row>
+          </Group>
+          <Group title={t("game.newInstances")}>
+            <Row title={t("game.defaultLoader")}>
+              <Segmented label={t("game.defaultLoader")} value={s.defaultLoader} onchange={set("defaultLoader")} options={LOADERS.map((l) => ({ value: l.id, label: l.label }))} />
+            </Row>
+            <Row title={t("game.perfMods")} desc={t("game.perfModsDesc")}><Toggle label={t("game.perfMods")} checked={s.installPerformanceMods} onchange={set("installPerformanceMods")} /></Row>
+            <Row title={t("game.snapshots")}><Toggle label={t("game.snapshots")} checked={s.showSnapshots} onchange={set("showSnapshots")} /></Row>
+            <Row title={t("game.oldVersions")}><Toggle label={t("game.oldVersions")} checked={s.showOldVersions} onchange={set("showOldVersions")} /></Row>
+          </Group>
+        {:else if section === "engine"}
+          <p class="lead">{t("engine.lead")}</p>
+          <Group title={t("engine.performance")}>
+            <Row title={t("engine.xwayland")} desc={t("engine.xwaylandDesc")}><Toggle label={t("engine.xwayland")} checked={e.xwayland} onchange={(v) => setEngine({ xwayland: v })} /></Row>
+          </Group>
+          <Group title={t("engine.graphics")}>
+            <Row title={t("engine.lod")} desc={t("engine.lodDesc")}><Select label={t("engine.lod")} value={String(e.lodDistance ?? "")} options={lodOptions} onchange={numeric("lodDistance")} /></Row>
+            <Row title={t("engine.resolution")} desc={t("engine.resolutionDesc")}><Select label={t("engine.resolution")} value={String(e.resolutionScale ?? "")} options={scaleOptions} onchange={numeric("resolutionScale")} /></Row>
+            <Row title={t("engine.aa")}>
+              <Select label={t("engine.aa")} value={e.antialiasing} onchange={(antialiasing) => setEngine({ antialiasing })} options={[{ value: "game", label: t("engine.asGame") }, { value: "off", label: t("common.off") }, { value: "fxaa", label: "FXAA" }, { value: "taa", label: "TAA" }]} />
+            </Row>
+            <Row title={t("engine.api")} desc={t("engine.apiDesc")}>
+              <Select label={t("engine.api")} value={e.graphicsApi} onchange={(graphicsApi) => setEngine({ graphicsApi })} options={[{ value: "game", label: t("engine.asGame") }, { value: "auto", label: t("engine.auto") }, { value: "vulkan", label: "Vulkan" }, { value: "opengl", label: "OpenGL" }]} />
+            </Row>
+            <Row title="HDR" desc={t("engine.hdrDesc")}><Select label="HDR" value={triple("hdr")} options={onOff} onchange={setTriple("hdr")} /></Row>
+            <Row title={t("engine.battery")} desc={t("engine.batteryDesc")}><Select label={t("engine.battery")} value={triple("batteryMode")} options={onOff} onchange={setTriple("batteryMode")} /></Row>
+            <Row title={t("engine.fps")} desc={t("engine.fpsDesc")}><Select label={t("engine.fps")} value={triple("fpsOverlay")} options={onOff} onchange={setTriple("fpsOverlay")} /></Row>
+          </Group>
+        {:else if section === "java"}
+          <Group title={t("java.memory")}>
+            <Row title={t("java.maxMemory")} desc={t("java.maxMemoryDesc", { gb: ((app.info?.totalMemoryMb ?? 0) / 1024).toFixed(1) })}>
+              <MemorySlider value={s.memoryMaxMb} onchange={setMaxMemory} />
+            </Row>
+            <Row title={t("java.minMemory")}>
+              <Select label={t("java.minMemory")} width={120} value={minMemoryValue} options={memoryOptions} onchange={(v) => updateSettings({ memoryMinMb: +v })} />
+            </Row>
+          </Group>
+          <Group title={t("java.runtime")}>
+            <Row title={t("java.optimized")} desc={t("java.optimizedDesc")}><Toggle label={t("java.optimized")} checked={s.optimizedJvmArgs} onchange={set("optimizedJvmArgs")} /></Row>
+            <Row title={t("java.args")} stacked>
+              <input class="input mono" aria-label={t("java.args")} placeholder="-XX:+UseZGC" value={s.jvmArgs} onchange={(ev) => updateSettings({ jvmArgs: ev.currentTarget.value })} />
+            </Row>
+            <Row title={t("java.path")} desc={t("java.pathDesc")} stacked>
+              <div class="java">
+                <input class="input mono" aria-label={t("java.path")} placeholder={t("java.auto")} value={s.javaPath} onchange={(ev) => updateSettings({ javaPath: ev.currentTarget.value.trim() })} />
+                <button class="btn" onclick={scanJava} disabled={scanning}>{#if scanning}<LoaderCircle size={14} class="spin" />{/if} {t("java.detect")}</button>
+                {#if s.javaPath}<button class="btn ghost" onclick={() => updateSettings({ javaPath: "" })}>{t("java.useAuto")}</button>{/if}
+              </div>
+              {#if javas}
+                <div class="javas">
+                  {#each javas as j (j.path)}
+                    <button class="jv" class:on={s.javaPath === j.path} onclick={() => updateSettings({ javaPath: j.path })}>
+                      <span class="major">Java {j.major}</span>
+                      <span class="mono path">{j.path}</span>
+                      <span class="dim">{t(j.source === "bundled" ? "java.bundled" : "java.system")}</span>
+                    </button>
+                  {:else}
+                    <div class="dim">{t("java.none")}</div>
+                  {/each}
+                </div>
               {/if}
-              <button class="btn sm ghost danger" onclick={() => logout(a.uuid)}><LogOut size={14} /> Wyloguj</button>
+            </Row>
+          </Group>
+        {:else if section === "advanced"}
+          <Group title={t("advanced.tools")}>
+            <Row title="Feral GameMode" desc={t("advanced.gamemodeDesc")}><Toggle label="Feral GameMode" checked={s.gamemode} onchange={set("gamemode")} /></Row>
+            <Row title="MangoHud" desc={t("advanced.mangohudDesc")}><Toggle label="MangoHud" checked={s.mangohud} onchange={set("mangohud")} /></Row>
+            <Row title={t("advanced.gpu")} desc={t("advanced.gpuDesc")}><Toggle label={t("advanced.gpu")} checked={s.discreteGpu} onchange={set("discreteGpu")} /></Row>
+          </Group>
+          <Group title={t("advanced.commands")}>
+            <Row title={t("advanced.wrapper")} desc={t("advanced.wrapperDesc")} stacked>
+              <input class="input mono" aria-label={t("advanced.wrapper")} placeholder={t("common.none")} value={s.wrapperCommand} onchange={(ev) => updateSettings({ wrapperCommand: ev.currentTarget.value })} />
+            </Row>
+            <Row title={t("advanced.env")} desc={t("advanced.envDesc")} stacked>
+              <textarea class="input" aria-label={t("advanced.env")} rows="3" placeholder="__GL_THREADED_OPTIMIZATIONS=0" value={s.envVars} onchange={(ev) => updateSettings({ envVars: ev.currentTarget.value })}></textarea>
+            </Row>
+            <Row title={t("advanced.pre")} desc={t("advanced.preDesc")} stacked>
+              <input class="input mono" aria-label={t("advanced.pre")} placeholder={t("common.none")} value={s.preLaunchCommand} onchange={(ev) => updateSettings({ preLaunchCommand: ev.currentTarget.value })} />
+            </Row>
+            <Row title={t("advanced.post")} stacked>
+              <input class="input mono" aria-label={t("advanced.post")} placeholder={t("common.none")} value={s.postExitCommand} onchange={(ev) => updateSettings({ postExitCommand: ev.currentTarget.value })} />
+            </Row>
+          </Group>
+        {:else if section === "accounts"}
+          <Group>
+            {#each app.accounts as a (a.uuid)}
+              <div class="acc">
+                <Head skinUrl={a.skinUrl} name={a.name} size={32} radius={6} />
+                <div class="acc-text">
+                  <b>{a.name}</b>
+                  <small class="dim mono">{a.uuid}</small>
+                </div>
+                {#if a.active}
+                  <span class="dim active">{t("account.active")}</span>
+                {:else}
+                  <button class="btn sm" onclick={() => api.setActiveAccount(a.uuid).then((l) => (app.accounts = l)).catch(toastError)}>{t("account.setActive")}</button>
+                {/if}
+                <button class="btn sm ghost danger" onclick={() => logout(a.uuid)}><LogOut size={14} /> {t("account.logout")}</button>
+              </div>
+            {/each}
+            <div class="add"><button class="btn" onclick={() => (app.addAccountOpen = true)}><Plus size={14} /> {t("account.addMicrosoft")}</button></div>
+          </Group>
+        {:else}
+          <div class="about">
+            <img src="/icon.svg" alt="" width="48" height="48" />
+            <div>
+              <b>Patina {app.info?.version}</b>
+              <div class="dim">{app.info?.os} / {app.info?.arch}</div>
             </div>
-          {/each}
-          <div class="acc add">
-            <button class="btn" onclick={() => (addAccount = true)}><Plus size={15} /> Dodaj konto Microsoft</button>
           </div>
-        </div>
-      {:else}
-        <div class="card block about">
-          <img src="/icon.svg" alt="" width="56" height="56" />
-          <div>
-            <h3>Patina <span class="dim">{app.info?.version}</span></h3>
-            <p class="muted">Minimalistyczny launcher Minecraft. {app.info?.os} / {app.info?.arch}</p>
-          </div>
-        </div>
-        <div class="card block">
-          <p class="muted credit">Silnik Rust ma otwarty kod na licencji MIT (plik LICENSE w folderze silnika). Patina jest nieoficjalna, niezwiązana z Mojang ani Microsoft.</p>
-        </div>
-        <div class="card block">
-          <Row title="Folder danych" desc={app.info?.dataDir}>
-            <button class="btn" onclick={() => api.openFolder().catch(toastError)}><FolderOpen size={15} /> Otwórz</button>
-          </Row>
-          <Row title="Przewodnik powitalny" desc="Pokaż ponownie ekran pierwszego uruchomienia.">
-            <button class="btn" onclick={() => { updateSettings({ onboarded: false }); toast("Przewodnik pokaże się teraz"); }}>Pokaż</button>
-          </Row>
-        </div>
-      {/if}
+          <p class="lead">{t("about.credit")}</p>
+          <Group>
+            <Row title={t("about.dataDir")} desc={app.info?.dataDir}>
+              <button class="btn" onclick={() => api.openFolder().catch(toastError)}><FolderOpen size={14} /> {t("common.open")}</button>
+            </Row>
+            <Row title={t("about.guide")}>
+              <button class="btn" onclick={() => { updateSettings({ onboarded: false }); toast(t("about.guideShown")); }}>{t("common.show")}</button>
+            </Row>
+          </Group>
+        {/if}
       </div>
-    </section>
+    </div>
   {/key}
 </div>
 
-{#if addAccount}
-  <Modal onclose={() => { api.cancelLogin(); addAccount = false; }} width={420}>
-    <h3 style="margin-bottom: 16px">Dodaj konto</h3>
-    <LoginPanel onsuccess={(a) => { addAccount = false; toast(`Zalogowano jako ${a.name}`, "success"); }} />
-  </Modal>
-{/if}
-
 <style>
-  .settings-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 24px 14px; }
-  .settings-head h1 { font-size: 1.55rem; font-weight: 600; }
-  .save-state { color: var(--text-3); font-size: 0.78rem; }
-  .retry { color: var(--danger); text-decoration: underline; text-underline-offset: 3px; }
-  .look-title { font-size: 1.45rem; font-weight: 560; letter-spacing: -0.035em; margin: 10px 0 6px; }
-  .look-desc { margin: 0 0 22px; font-size: 0.9rem; }
-  .appearance-details { border-top: 1px solid var(--border); }
-  .appearance-details summary { padding: 19px 0; cursor: pointer; color: var(--text-2); font-size: 0.92rem; font-weight: 550; }
-  .appearance-details summary:hover, .appearance-details[open] summary { color: var(--text); }
-  .appearance-details[open] { padding-bottom: 18px; }
-  .page {
+  .settings {
     height: 100%;
     display: flex;
+    min-height: 0;
+  }
+  nav {
+    position: relative;
+    width: 188px;
+    flex-shrink: 0;
+    display: flex;
     flex-direction: column;
+    gap: 2px;
+    padding: 12px;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
   }
-  .tabs {
-    display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 4px 22px;
-    padding: 8px 12px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .tabs button {
-    padding: 8px 2px 11px;
-    margin-bottom: -1px;
-    border-bottom: 2px solid transparent;
-    font-size: 0.9rem;
-    font-weight: 560;
+  .nav-label {
+    padding: 12px 8px 4px;
     color: var(--text-3);
-    transition: color 0.16s, border-color 0.16s;
+    font-size: var(--fs-12);
+    font-weight: 500;
   }
-  .tabs button:hover {
-    color: var(--text);
-  }
-  .tabs button.on {
-    color: var(--text);
-    border-bottom-color: var(--accent);
-  }
-  .content {
+  .nav-label:nth-of-type(1) { padding-top: 4px; }
+  .about-link { margin-top: auto; }
+  .pane {
     flex: 1;
-    overflow: auto;
     min-width: 0;
-    padding: 18px 20px 40px;
+    overflow-y: auto;
+    padding: 24px 24px 48px;
   }
-  .column {
-    max-width: 640px;
-    margin: 0 auto;
-  }
-  /* Rows sit straight on the page: hairlines instead of cards. */
-  .column :global(.card) {
-    background: none;
-    border: 0;
-    border-radius: 0;
-  }
-  .pick {
-    width: 170px;
-  }
-  .lead {
-    margin: -6px 0 14px;
-    line-height: 1.45;
-  }
-  .credit {
-    margin-top: 12px;
-    font-size: 0.85rem;
-    line-height: 1.45;
-  }
-  .card .credit {
-    margin: 0;
-    padding: 14px 0;
-  }
-  .sub {
-    font-size: 0.72rem;
-    font-weight: 650;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin: 26px 0 2px;
-    color: var(--text-3);
-  }
-  .block {
-    padding: 0;
-  }
-  .seg {
+  .column { max-width: 640px; margin: 0 auto; }
+  header {
     display: flex;
-    padding: 3px;
-    border-radius: 10px;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 28px;
+    margin-bottom: 16px;
   }
-  .seg button {
-    padding: 6px 12px;
-    border-radius: 7px;
-    font-weight: 600;
-    font-size: 0.88rem;
-    color: var(--text-2);
-    transition: background 0.2s, color 0.2s;
-  }
-  .seg button.on {
-    background: var(--panel-3);
-    color: var(--text);
-    box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
-  }
-  .accents {
+  .save { color: var(--text-3); font-size: var(--fs-12); }
+  .save.error { color: var(--danger); text-decoration: underline; text-underline-offset: 3px; }
+  .lead { margin: 0 0 24px; color: var(--text-2); font-size: var(--fs-13); line-height: 1.5; }
+  .value { color: var(--text-2); font-size: var(--fs-13); }
+  .range {
     display: flex;
-    gap: 7px;
+    align-items: center;
+    gap: 12px;
+    width: 240px;
   }
+  .range input { flex: 1; min-width: 0; }
+  .range span { width: 40px; font-size: var(--fs-12); text-align: right; }
+  .accents { display: flex; flex-wrap: wrap; gap: 8px; }
   .sw {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
+    position: relative;
+    width: 28px;
+    height: 28px;
     display: grid;
     place-items: center;
-    color: white;
-    border: 2px solid var(--panel);
-    box-shadow: 0 0 0 1px var(--border-2);
-    transition: transform 0.2s var(--ease-spring);
+    border-radius: var(--radius-s);
+    color: #101214;
+    box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.3);
     cursor: pointer;
-    position: relative;
   }
-  .sw:hover {
-    transform: scale(1.15);
-  }
-  .sw.on {
-    box-shadow: 0 0 0 2px var(--text);
-  }
-  .custom {
-    background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
-  }
+  .sw[aria-pressed="true"], .sw.on { outline: 2px solid var(--text); outline-offset: 2px; }
+  .custom { color: var(--text-2); border: 1px dashed var(--border-2); box-shadow: none; }
   .custom input {
     position: absolute;
     inset: 0;
     opacity: 0;
     cursor: pointer;
   }
-  .scale {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 260px;
-  }
-  .scale input {
-    flex: 1;
-    accent-color: var(--accent);
-  }
-  .scale span {
-    width: 44px;
-    text-align: right;
-  }
-  .num {
-    width: 96px;
-  }
-  .java {
-    display: flex;
-    gap: 8px;
-  }
-  .javas {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 4px;
-  }
+  .java { display: flex; gap: 8px; }
+  .java .input { flex: 1; min-width: 0; }
+  .javas { display: flex; flex-direction: column; gap: 4px; width: 100%; }
   .jv {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 8px;
+    gap: 8px;
+    min-height: 32px;
+    padding: 4px 8px;
+    border-radius: var(--radius-s);
     text-align: left;
-    background: var(--panel-2);
-    border: 1px solid transparent;
+    font-size: var(--fs-12);
+    border: 1px solid var(--border);
+    transition: border-color 0.12s;
   }
-  .jv:hover {
-    border-color: var(--border-2);
-  }
-  .jv.on {
-    border-color: var(--accent);
-  }
-  .path {
-    flex: 1;
-    font-size: 0.8rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+  .jv:hover { border-color: var(--border-2); }
+  .jv.on { border-color: var(--accent); }
+  .major { font-weight: 600; white-space: nowrap; }
+  .path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .acc {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 14px 0;
+    min-height: 56px;
     border-bottom: 1px solid var(--border);
   }
-  .acc.add {
-    border-bottom: 0;
-  }
-  .acc-text {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-  .acc-text small {
-    font-size: 0.75rem;
-    margin-top: 2px;
-  }
-  .about {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 18px 20px;
-    margin-bottom: 12px;
-  }
-  .about p {
-    margin: 4px 0 0;
-  }
+  .acc-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .acc-text b { font-size: var(--fs-13); font-weight: 500; }
+  .acc-text small { font-size: var(--fs-12); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .active { font-size: var(--fs-12); }
+  .add { padding-top: 12px; }
+  .about { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .about b { font-weight: 600; }
+  .about .dim { font-size: var(--fs-12); }
 </style>

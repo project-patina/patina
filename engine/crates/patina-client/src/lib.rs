@@ -6,16 +6,16 @@ pub mod ambience;
 pub mod animate_tick;
 pub mod arrows;
 pub use patina_client_render::{
-    assets, atlas_sources, audio, auth, bidi, biome, block_entities, block_entity_anim,
-    block_entity_render, border_render, breaking, brewing, camera, chat, chunk, chunk_map, clouds,
-    collisions, command_block, containers, crash, datapack, dynamic_light, effects, environment,
-    extras, fast_hash, fog, font, gfx, graphics, graphics_style, graphics_ui, hud, hud_layout,
+    assets, atlas_sources, audio, auth, bidi, biome, block_entities, block_entity_anim, boot_splash,
+    block_entity_render, border_render, breaking, brewing, camera, chat, chunk, chunk_map,
+    client_screen, client_settings, clouds, collisions, command_block, containers, crash, datapack, dynamic_light, effects, environment,
+    extras, extras_hud, fast_hash, fog, font, gfx, graphics, graphics_ui, hud, hud_layout,
     hud_overlays, inventory_effects, java_text, level_loading, light, lod, logging, menu_blur,
     mesher, minimap, mipmap, mod_list, model_library, models, options_file, options_fixes,
     options_ui, overlay, pack_screen, packs, par, particles, poi_sections, potent_sulfur,
     providers, screen_draw, screen_effects, sculk, section_mask, settings, shader_pack_list, signs,
     skins, sound_engine, sound_events, sound_preview, spans, split_layout, sprites, streaming,
-    tab_list, telemetry, testgen, title_edition, trims, ui, vault, weather, widgets, world,
+    tab_list, telemetry, testgen, title_edition, title_player, trims, ui, vault, weather, widgets, world,
     worldborder, zip,
 };
 pub mod attack_strength;
@@ -44,28 +44,23 @@ pub mod debug_keys;
 pub mod debug_overlay;
 pub mod dialog;
 pub mod dialog_screen;
-pub mod discord_presence;
 pub mod end_crystal;
 pub mod end_gateway;
 pub mod entities;
 pub mod entity_culling;
 pub mod entity_nbt;
-pub mod extras_hud;
 pub mod falling_block;
 pub mod fire_render;
 pub mod first_person;
 pub mod flatgen;
-pub mod friends_screen;
 pub mod furnace;
 pub mod game_mode_switcher;
 pub mod game_rules_screen;
 pub mod gizmos;
 pub mod gossip;
 pub mod health;
-pub mod heartbeat;
 pub mod hotbar;
 pub mod hunger;
-pub mod inv_sort;
 pub mod item_activation;
 pub mod item_render;
 pub mod item_sync;
@@ -97,7 +92,6 @@ pub mod raid;
 pub mod random_tick_sections;
 pub mod recipe_book;
 pub mod recipe_book_screen;
-pub mod reconnect;
 pub mod save;
 pub mod scoreboard_cmd;
 pub mod screen_layout;

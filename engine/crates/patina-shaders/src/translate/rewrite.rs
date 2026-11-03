@@ -13,44 +13,44 @@ impl Stage<'_> {
     /// Declarations of ours this stage uses (after the uniform block, samplers and varyings).
     pub(super) fn prelude(&self) -> String {
         let mut p = String::from(
-            "float hz_modf(float x, out float i) { i = trunc(x); return x - i; }\n\
-             vec2 hz_modf(vec2 x, out vec2 i) { i = trunc(x); return x - i; }\n\
-             vec3 hz_modf(vec3 x, out vec3 i) { i = trunc(x); return x - i; }\n\
-             vec4 hz_modf(vec4 x, out vec4 i) { i = trunc(x); return x - i; }\n\
-             struct hz_FogParameters { vec4 color; float density; float start; float end; float scale; };\n\
-             hz_FogParameters hz_Fog;\n",
+            "float pt_modf(float x, out float i) { i = trunc(x); return x - i; }\n\
+             vec2 pt_modf(vec2 x, out vec2 i) { i = trunc(x); return x - i; }\n\
+             vec3 pt_modf(vec3 x, out vec3 i) { i = trunc(x); return x - i; }\n\
+             vec4 pt_modf(vec4 x, out vec4 i) { i = trunc(x); return x - i; }\n\
+             struct pt_FogParameters { vec4 color; float density; float start; float end; float scale; };\n\
+             pt_FogParameters pt_Fog;\n",
         );
         if self.gbuffers {
             // Set by our `main` from the frame's matrices (gbuffers.rs).
             p.push_str(
-                "mat4 hz_ModelViewMatrix; mat4 hz_ProjectionMatrix; mat4 hz_ModelViewProjectionMatrix;\n\
-                 mat4 hz_ModelViewMatrixInverse; mat4 hz_ProjectionMatrixInverse; mat3 hz_NormalMatrix; mat4 hz_TextureMatrix[8];\n",
+                "mat4 pt_ModelViewMatrix; mat4 pt_ProjectionMatrix; mat4 pt_ModelViewProjectionMatrix;\n\
+                 mat4 pt_ModelViewMatrixInverse; mat4 pt_ProjectionMatrixInverse; mat3 pt_NormalMatrix; mat4 pt_TextureMatrix[8];\n",
             );
         } else {
             p.push_str(
-                "const mat4 hz_ModelViewMatrix = mat4(1.0); const mat4 hz_ProjectionMatrix = mat4(2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, -1.0, -1.0, 0.0, 1.0);\n\
-                 const mat4 hz_ModelViewProjectionMatrix = hz_ProjectionMatrix; const mat4 hz_ModelViewMatrixInverse = mat4(1.0); const mat3 hz_NormalMatrix = mat3(1.0);\n\
-                 const mat4 hz_ProjectionMatrixInverse = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.5, 0.5, 0.0, 1.0);\n\
-                 const mat4 hz_TextureMatrix[8] = mat4[8](mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0));\n",
+                "const mat4 pt_ModelViewMatrix = mat4(1.0); const mat4 pt_ProjectionMatrix = mat4(2.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, -1.0, -1.0, 0.0, 1.0);\n\
+                 const mat4 pt_ModelViewProjectionMatrix = pt_ProjectionMatrix; const mat4 pt_ModelViewMatrixInverse = mat4(1.0); const mat3 pt_NormalMatrix = mat3(1.0);\n\
+                 const mat4 pt_ProjectionMatrixInverse = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.5, 0.5, 0.0, 1.0);\n\
+                 const mat4 pt_TextureMatrix[8] = mat4[8](mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0));\n",
             );
         }
         if self.kind == ShaderStage::Vertex {
             p.push_str(
-                "const vec2 hz_quad[6] = vec2[6](vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(1.0, 1.0), vec2(0.0, 0.0), vec2(1.0, 1.0), vec2(0.0, 1.0));\n\
-                 vec4 hz_Vertex; vec4 hz_Color; vec4 hz_SecondaryColor; vec3 hz_Normal; float hz_FogCoord;\n\
-                 vec4 hz_MultiTexCoord0; vec4 hz_MultiTexCoord1; vec4 hz_MultiTexCoord2; vec4 hz_MultiTexCoord3;\n\
-                 vec4 hz_MultiTexCoord4; vec4 hz_MultiTexCoord5; vec4 hz_MultiTexCoord6; vec4 hz_MultiTexCoord7;\n",
+                "const vec2 pt_quad[6] = vec2[6](vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(1.0, 1.0), vec2(0.0, 0.0), vec2(1.0, 1.0), vec2(0.0, 1.0));\n\
+                 vec4 pt_Vertex; vec4 pt_Color; vec4 pt_SecondaryColor; vec3 pt_Normal; float pt_FogCoord;\n\
+                 vec4 pt_MultiTexCoord0; vec4 pt_MultiTexCoord1; vec4 pt_MultiTexCoord2; vec4 pt_MultiTexCoord3;\n\
+                 vec4 pt_MultiTexCoord4; vec4 pt_MultiTexCoord5; vec4 pt_MultiTexCoord6; vec4 pt_MultiTexCoord7;\n",
             );
         } else {
             for n in &self.outputs {
                 if !self.frag_outs.iter().any(|(at, _)| at == n) {
-                    writeln!(p, "layout(location = {n}) out vec4 hz_out{n};").unwrap();
+                    writeln!(p, "layout(location = {n}) out vec4 pt_out{n};").unwrap();
                 }
             }
             for (_, decl) in &self.frag_outs {
                 writeln!(p, "{decl}").unwrap();
             }
-            p.push_str("vec4 hz_FragCoord;\n");
+            p.push_str("vec4 pt_FragCoord;\n");
         }
         p
     }
@@ -139,12 +139,12 @@ impl Stage<'_> {
                 out.push_str(t);
                 continue;
             }
-            // A function definition's sampler parameters: `sampler2D s` → `texture2D s, sampler hz_s_s`.
+            // A function definition's sampler parameters: `sampler2D s` → `texture2D s, sampler pt_s_s`.
             if depth == 0 && t.contains("sampler") && calls.len() == 1 {
                 if let Some(n) = next(i).filter(|&n| is_ident(self.tokens[n])) {
                     let name = self.tokens[n];
                     let (texture, sampler) = split_sampler(t);
-                    write!(out, "{texture} {name}, {sampler} hz_s_{name}").unwrap();
+                    write!(out, "{texture} {name}, {sampler} pt_s_{name}").unwrap();
                     params.insert(name.to_owned(), t.to_owned());
                     skip_until = n + 1;
                     continue;
@@ -178,18 +178,18 @@ impl Stage<'_> {
                 }) && prev(i)
                     .is_some_and(|j| matches!(self.tokens[j], "(" | ","));
                 if as_argument {
-                    write!(out, "{t}, hz_s_{t}").unwrap();
+                    write!(out, "{t}, pt_s_{t}").unwrap();
                 } else {
-                    write!(out, "{ty}({t}, hz_s_{t})").unwrap();
+                    write!(out, "{ty}({t}, pt_s_{t})").unwrap();
                 }
                 continue;
             }
             if uniforms.get(t).is_some_and(|ty| ty == "bool") {
-                write!(out, "(hz_bool_{t} != 0)").unwrap();
+                write!(out, "(pt_bool_{t} != 0)").unwrap();
                 continue;
             }
             let replaced: Option<String> = match t {
-                "main" if depth == 0 && called => Some("hz_main".into()),
+                "main" if depth == 0 && called => Some("pt_main".into()),
                 // naga's frontend leaves the code after an unconditional `discard` or `return;`
                 // unreachable but half-built (a module that fails validation): behind an `if`
                 // it stays reachable as far as naga knows.
@@ -198,7 +198,7 @@ impl Stage<'_> {
                     Some("if (true) return".into())
                 }
                 // GLSL's `modf`, which naga's frontend lacks.
-                "modf" if called => Some("hz_modf".into()),
+                "modf" if called => Some("pt_modf".into()),
                 "texture2D" | "texture1D" | "texture3D" | "textureCube" if called => {
                     Some("texture".into())
                 }
@@ -216,33 +216,33 @@ impl Stage<'_> {
                     // `ftransform()` → the product it stands for; its `()` stays as a no-op call... so skip it.
                     let close = next(i).and_then(next);
                     skip_until = close.map_or(i + 1, |c| c + 1);
-                    Some("(hz_ModelViewProjectionMatrix * hz_Vertex)".into())
+                    Some("(pt_ModelViewProjectionMatrix * pt_Vertex)".into())
                 }
-                "gl_FragColor" => Some("hz_out0".into()),
+                "gl_FragColor" => Some("pt_out0".into()),
                 "gl_FragData" | "gl_TexCoord" => match self.index_after(i) {
                     Some((n, close)) => {
                         skip_until = close + 1;
                         Some(match t {
-                            "gl_FragData" => format!("hz_out{n}"),
-                            _ => format!("hz_TexCoord{n}"),
+                            "gl_FragData" => format!("pt_out{n}"),
+                            _ => format!("pt_TexCoord{n}"),
                         })
                     }
                     None => None,
                 },
-                "gl_Color" if fragment => Some("hz_FrontColor".into()),
+                "gl_Color" if fragment => Some("pt_FrontColor".into()),
                 "gl_FragCoord" if !fragment => None,
-                "gl_FragCoord" => Some("hz_FragCoord".into()),
-                "gl_FrontColor" => Some("hz_FrontColor".into()),
-                "gl_Fog" => Some("hz_Fog".into()),
+                "gl_FragCoord" => Some("pt_FragCoord".into()),
+                "gl_FrontColor" => Some("pt_FrontColor".into()),
+                "gl_Fog" => Some("pt_Fog".into()),
                 _ if UNIFORM_STATE.iter().any(|b| t.starts_with(b)) => {
-                    Some(format!("hz_{}", &t[3..]))
+                    Some(format!("pt_{}", &t[3..]))
                 }
                 _ if !fragment && VERTEX_INPUTS.iter().any(|b| t.starts_with(b)) => {
-                    Some(format!("hz_{}", &t[3..]))
+                    Some(format!("pt_{}", &t[3..]))
                 }
                 "gl_VertexID" => Some("gl_VertexIndex".into()),
                 "gl_InstanceID" => Some("gl_InstanceIndex".into()),
-                _ if old && LATER_KEYWORDS.contains(&t) => Some(format!("hz_kw_{t}")),
+                _ if old && LATER_KEYWORDS.contains(&t) => Some(format!("pt_kw_{t}")),
                 _ => None,
             };
             out.push_str(replaced.as_deref().unwrap_or(t));
@@ -284,8 +284,8 @@ impl Stage<'_> {
 /// What our vertex `main` gives a vertex input of a composite-style program.
 pub(super) fn attribute_value(name: &str, ty: &str) -> String {
     match name {
-        "vaPosition" => "vec3(hz_p, 0.0)".into(),
-        "vaUV0" => "hz_p".into(),
+        "vaPosition" => "vec3(pt_p, 0.0)".into(),
+        "vaUV0" => "pt_p".into(),
         "vaColor" => "vec4(1.0)".into(),
         "vaNormal" => "vec3(0.0, 0.0, 1.0)".into(),
         _ => format!("{ty}(0)"),

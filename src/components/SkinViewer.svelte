@@ -2,8 +2,7 @@
   import { onDestroy, onMount } from "svelte";
   import { LinearSRGBColorSpace } from "three";
   import { SkinViewer } from "skinview3d";
-  import { DEFAULT_POSE, type Pose } from "../lib/pose";
-  import type { Gear } from "../lib/playerGear";
+  import { t } from "../lib/i18n.svelte";
   import { makeAnimation, type AnyAnimation, type LookTarget } from "../lib/skinAnimations";
 
   let {
@@ -16,9 +15,6 @@
     interactive = true,
     followCursor = true,
     armed = false,
-    pose = () => DEFAULT_POSE,
-    still = false,
-    onready,
   }: {
     skin: string;
     cape?: string | null;
@@ -29,11 +25,6 @@
     interactive?: boolean;
     followCursor?: boolean;
     armed?: boolean;
-    /** The armed stance, read every frame. */
-    pose?: () => Pose;
-    /** Hold the stance exactly, for the pose editor. */
-    still?: boolean;
-    onready?: (viewer: SkinViewer, gear: () => Gear | null) => void;
   } = $props();
 
   let canvas: HTMLCanvasElement;
@@ -84,7 +75,7 @@
     p.skin.body.position.x = 0;
     p.skin.head.position.set(0, 0, 0);
     p.position.y = 0;
-    anim = makeAnimation(look, () => viewer!.playerObject.rotation.y, armed ? { pose, still: () => still } : null);
+    anim = makeAnimation(look, () => viewer!.playerObject.rotation.y, armed);
     viewer.animation = anim;
   }
 
@@ -100,7 +91,6 @@
     // gamma. Drawn straight to the canvas, three.js would add it and wash the skin out.
     viewer.renderer.outputColorSpace = LinearSRGBColorSpace;
     setAnimation();
-    onready?.(viewer, () => anim?.gear?.() ?? null);
     const io = new IntersectionObserver(([e]) => (visible = e.isIntersecting));
     io.observe(canvas);
     window.addEventListener("pointermove", onPointer, { passive: true });
@@ -136,14 +126,14 @@
   });
 </script>
 
-<canvas bind:this={canvas} class:loaded onclick={() => anim?.strike?.()} title={armed ? "Kliknij, żeby zaatakował" : undefined}></canvas>
+<canvas bind:this={canvas} class:loaded onclick={() => anim?.strike?.()} title={armed ? t("home.strike") : undefined}></canvas>
 
 <style>
   canvas {
     display: block;
     opacity: 0;
-    transform: translateY(12px) scale(0.98);
-    transition: opacity 0.6s var(--ease), transform 0.8s var(--ease);
+    transform: translateY(6px);
+    transition: opacity 0.24s var(--ease), transform 0.24s var(--ease);
     cursor: grab;
   }
   canvas:active {

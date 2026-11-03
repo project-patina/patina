@@ -47,7 +47,7 @@ async fn vanilla_json(ctx: &Ctx, mc: &str) -> Result<VersionJson> {
     }
     let Some(entry) = entry else {
         manifest?;
-        bail!("Nie znaleziono wersji Minecraft {mc}");
+        bail!("Nie znaleziono wersji Minecraft {mc}", "Minecraft version {mc} not found");
     };
     let bytes = http::get_bytes(&ctx.http, &entry.url).await?;
     let v: VersionJson = serde_json::from_slice(&bytes)?;
@@ -81,7 +81,7 @@ fn natives_classifier(lib: &mojang::Library) -> Option<String> {
 
 pub async fn prepare(ctx: &Ctx, inst: &mut Instance, settings: &Settings, reporter: &Reporter, cancel: &CancellationToken) -> Result<Prepared> {
     let conc = settings.max_concurrent_downloads as usize;
-    reporter.report("version", 0, 1, format!("Przygotowywanie {} {}…", inst.loader.label(), inst.mc_version));
+    reporter.report("version", 0, 1, crate::tr!("Przygotowywanie {} {}…", "Preparing {} {}…", inst.loader.label(), inst.mc_version));
     let version = resolve_version(ctx, inst).await?;
     let vanilla_id = inst.mc_version.clone();
     let features = Features::default();
@@ -91,7 +91,7 @@ pub async fn prepare(ctx: &Ctx, inst: &mut Instance, settings: &Settings, report
     let client_jar = ctx.paths.client_jar(&vanilla_id);
     match version.downloads.as_ref().and_then(|d| d.client.as_ref()) {
         Some(c) => items.push(DlItem::new(&c.url, &client_jar).sha1(c.sha1.clone()).size(c.size)),
-        None => bail!("Wersja {vanilla_id} nie ma pliku klienta"),
+        None => bail!("Wersja {vanilla_id} nie ma pliku klienta", "Version {vanilla_id} has no client file"),
     }
 
     let libs_root = ctx.paths.libraries();
@@ -103,7 +103,7 @@ pub async fn prepare(ctx: &Ctx, inst: &mut Instance, settings: &Settings, report
         }
         let artifact = lib.downloads.as_ref().and_then(|d| d.artifact.as_ref());
         if let Some(a) = artifact {
-            let rel = a.path.clone().or_else(|| mojang::maven_path(&lib.name)).ok_or_else(|| Error::msg(format!("Zła biblioteka {}", lib.name)))?;
+            let rel = a.path.clone().or_else(|| mojang::maven_path(&lib.name)).ok_or_else(|| Error::msg(crate::tr!("Zła biblioteka {}", "Bad library {}", lib.name)))?;
             let path = libs_root.join(rel);
             if !a.url.is_empty() {
                 items.push(DlItem::new(&a.url, &path).sha1(a.sha1.clone()).size(a.size));
@@ -137,7 +137,7 @@ pub async fn prepare(ctx: &Ctx, inst: &mut Instance, settings: &Settings, report
         logging_arg = Some(lc.argument.replace("${path}", &path.to_string_lossy()));
     }
 
-    download_all(&ctx.http, items, conc, reporter, "libraries", "Pobieranie bibliotek", cancel).await?;
+    download_all(&ctx.http, items, conc, reporter, "libraries", crate::lang::tr("Pobieranie bibliotek", "Downloading libraries"), cancel).await?;
 
     // --- natives (pre-1.19 style: jars that must be unpacked) ---------------
     let natives_dir = ctx.paths.natives(&version.id);
@@ -149,10 +149,10 @@ pub async fn prepare(ctx: &Ctx, inst: &mut Instance, settings: &Settings, report
     }
 
     // --- assets ---------------------------------------------------------------
-    let Some(ai) = version.asset_index.clone() else { bail!("Wersja {vanilla_id} nie ma indeksu zasobów") };
+    let Some(ai) = version.asset_index.clone() else { bail!("Wersja {vanilla_id} nie ma indeksu zasobów", "Version {vanilla_id} has no asset index") };
     let assets_root = ctx.paths.assets();
     let index_path = assets_root.join("indexes").join(format!("{}.json", ai.id));
-    download_all(&ctx.http, vec![DlItem::new(&ai.url, &index_path).sha1(ai.sha1.clone()).size(ai.size)], 1, reporter, "assets", "Indeks zasobów", cancel).await?;
+    download_all(&ctx.http, vec![DlItem::new(&ai.url, &index_path).sha1(ai.sha1.clone()).size(ai.size)], 1, reporter, "assets", crate::lang::tr("Indeks zasobów", "Asset index"), cancel).await?;
     let index: AssetIndex = serde_json::from_slice(&std::fs::read(&index_path)?)?;
     let objects: Vec<DlItem> = index
         .objects
@@ -166,7 +166,7 @@ pub async fn prepare(ctx: &Ctx, inst: &mut Instance, settings: &Settings, report
             it
         })
         .collect();
-    download_all(&ctx.http, objects, conc, reporter, "assets", "Pobieranie zasobów gry", cancel).await?;
+    download_all(&ctx.http, objects, conc, reporter, "assets", crate::lang::tr("Pobieranie zasobów gry", "Downloading game assets"), cancel).await?;
 
     let legacy_assets_dir = if index.map_to_resources || index.is_virtual {
         let target = if index.map_to_resources { ctx.paths.game_dir(&inst.id).join("resources") } else { assets_root.join("virtual").join(&ai.id) };
@@ -197,7 +197,7 @@ pub async fn prepare(ctx: &Ctx, inst: &mut Instance, settings: &Settings, report
     let java = if !custom.trim().is_empty() {
         let p = PathBuf::from(custom.trim());
         if !p.exists() {
-            bail!("Nie znaleziono Javy: {}", p.display());
+            bail!("Nie znaleziono Javy: {}", "Java not found: {}", p.display());
         }
         p
     } else {

@@ -99,13 +99,13 @@ async fn fetch_one(http: &reqwest::Client, item: &DlItem, cancel: &CancellationT
         drop(file);
         if let Some(expected) = item.size {
             if received != expected {
-                return Err(Error::msg(format!("Niepełny plik {} (oczekiwano {expected} bajtów, pobrano {received})", item.url)));
+                return Err(Error::msg(crate::tr!("Niepełny plik {} (oczekiwano {expected} bajtów, pobrano {received})", "Incomplete file {} (expected {expected} bytes, got {received})", item.url)));
             }
         }
         if let Some(expected) = &item.sha1 {
             let got = hex::encode(h.finalize());
             if !got.eq_ignore_ascii_case(expected) {
-                return Err(Error::msg(format!("Suma SHA1 się nie zgadza dla {} (oczekiwano {expected}, jest {got})", item.url)));
+                return Err(Error::msg(crate::tr!("Suma SHA1 się nie zgadza dla {} (oczekiwano {expected}, jest {got})", "SHA1 mismatch for {} (expected {expected}, got {got})", item.url)));
             }
         }
         #[cfg(unix)]

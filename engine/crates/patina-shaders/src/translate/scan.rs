@@ -41,7 +41,7 @@ pub(super) struct Stage<'p> {
     pub(super) frag_coord: bool,
     /// Tokens written differently, by index.
     pub(super) replaced: HashMap<usize, String>,
-    /// Globals whose initializer runs in our `main` (`g = hz_init_g();`), in order.
+    /// Globals whose initializer runs in our `main` (`g = pt_init_g();`), in order.
     pub(super) inits: Vec<String>,
     pub(super) errors: Vec<Error>,
 }
@@ -163,12 +163,12 @@ impl<'p> Stage<'p> {
                 "gl_FragCoord" => s.frag_coord = true,
                 "gl_TexCoord" => {
                     if let Some((n, _)) = s.index_after(i) {
-                        s.builtin_varying(format!("hz_TexCoord{n}"));
+                        s.builtin_varying(format!("pt_TexCoord{n}"));
                     }
                 }
-                "gl_FrontColor" => s.builtin_varying("hz_FrontColor".into()),
+                "gl_FrontColor" => s.builtin_varying("pt_FrontColor".into()),
                 "gl_Color" if kind == ShaderStage::Fragment => {
-                    s.builtin_varying("hz_FrontColor".into())
+                    s.builtin_varying("pt_FrontColor".into())
                 }
                 _ => {}
             }
@@ -341,7 +341,7 @@ impl<'p> Stage<'p> {
     /// A global `T name = a ? b : c;` or, without `const`, any initialized global: naga only
     /// evaluates constant initializers at global scope (a conditional is not one; GL drivers
     /// also take uniforms and other globals there), so each initializer becomes a function of
-    /// ours on the same line (`T a; T hz_init_a() { return T(...); } T b; ...`), called by our
+    /// ours on the same line (`T a; T pt_init_a() { return T(...); } T b; ...`), called by our
     /// `main` before the pack's, in file order. The return converts as GLSL's initialization
     /// does (`vec2 v = ivec2(...)`).
     pub(super) fn initializer(&mut self, words: &[usize], to: usize) {
@@ -431,7 +431,7 @@ impl<'p> Stage<'p> {
                     };
                     replaced.push((
                         words[a],
-                        format!("; {ty}{array} hz_init_{name}() {{ return {open}"),
+                        format!("; {ty}{array} pt_init_{name}() {{ return {open}"),
                     ));
                     replaced.push((end_token, format!("{close}; }}{next}")));
                     names.push(name);

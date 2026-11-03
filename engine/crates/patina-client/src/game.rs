@@ -88,11 +88,9 @@ mod decorated_pot;
 mod dedicated;
 mod deflect;
 mod dialogs;
-mod discord;
 mod dispense_fixture;
 mod dispenser;
 mod dragon;
-mod dynamic_lights;
 mod enchant_effects;
 mod end;
 mod entity_culling;
@@ -106,7 +104,6 @@ mod fireworks;
 mod fishing;
 mod fov;
 mod frames;
-mod friends;
 mod functions;
 mod game_mode;
 mod gamemode_switcher;
@@ -244,7 +241,6 @@ mod trial_spawner;
 mod trial_visuals;
 mod trident;
 mod tutorial;
-mod tweaks;
 mod ui_control;
 mod vault;
 mod villagers;
@@ -255,6 +251,7 @@ mod wither;
 mod world_loading;
 mod zombie_reinforcements;
 mod zombie_villagers;
+use patina_client::boot_splash::{Splash, Stage};
 use patina_client::{
     Result,
     assets::{Assets, RenderAssets},
@@ -525,7 +522,7 @@ impl Options {
             match arg.as_str() {
                 "--help" | "-h" => {
                     println!(
-                        "Patina — Minecraft Java Edition {} in Rust\n\n  --resources PATH        Prepared resources (patina-prepare)\n  --render-distance N     Chunks, 2..128 (default 12)\n  --world NAME            World folder under saves/ (default \"New World\")\n  --seed N                World seed for new worlds (default 0)\n  --width N, --height N   Window size (default 1280 x 720)\n  --creative              Creative mode (default survival)\n  --test-terrain          Simple test terrain instead of vanilla generation\n  --frames N              Exit after N frames (testing)\n  --world-frames N        Exit after N frames drawn in the world (testing)\n  --smoke-report PATH     Write a JSON report on exit\n  --benchmark SCENARIO    Run a benchmark (standard, village, forest, ocean, mountain), write its report to benchmarks/ and quit\n  --control               Accept patina-ctl commands on a local socket\n  --control-socket PATH   Control socket path (default $XDG_RUNTIME_DIR/patina-control.sock)\n  --server HOST[:PORT]    Join a multiplayer server (offline mode) at start\n  --quickPlaySingleplayer WORLD  Open this world of saves/ at start, only if it exists (vanilla's)\n  --quickPlayMultiplayer HOST[:PORT]  The same as --server (vanilla's name)\n  --name NAME             Player name for multiplayer (default: generated once, kept in patina-player.txt)\n  --session-file PATH     Signed-in account from the launcher (read once, then deleted)\n  --session-stdin         The same account as JSON on standard input\n  --game-dir DIR          Game folder: saves, options.txt, packs, mods (default: the working directory)\n  --home DIR              Logs and crash reports (default $PATINA_HOME, else the platform data folder)\n  --fullscreen            Open the window fullscreen\n  --launch-api            Print the Launch API version and options as JSON (docs/api/launch.md)\n  --dev-mod PATH          A content mod (.hmod or folder) to develop: always on\n  --in-frame              DEPRECATED, do not use: unsupported, will be removed soon (also --no-server-thread)\n  --pregen                Add Patina's /pregen command (docs/pregeneration.md)\n\nControls: mouse look, WASD move, Space jump, Left Shift sneak, Left Ctrl sprint,\nleft click break, right click place/use, 1-9/scroll hotbar, E inventory,\nQ drop, F3 debug, Esc pause.",
+                        "Patina — Minecraft Java Edition {} in Rust\n\n  --resources PATH        Prepared resources (patina-prepare)\n  --render-distance N     Chunks, 2..128 (default 12)\n  --world NAME            World folder under saves/ (default \"New World\")\n  --seed N                World seed for new worlds (default 0)\n  --width N, --height N   Window size (default 1280 x 720)\n  --creative              Creative mode (default survival)\n  --test-terrain          Simple test terrain instead of vanilla generation\n  --frames N              Exit after N frames (testing)\n  --world-frames N        Exit after N frames drawn in the world (testing)\n  --smoke-report PATH     Write a JSON report on exit\n  --benchmark SCENARIO    Run a benchmark (standard, village, forest, ocean, mountain), write its report to benchmarks/ and quit\n  --control               Accept patina-ctl commands on a local socket\n  --control-socket PATH   Control socket path (default $XDG_RUNTIME_DIR/patina-control.sock)\n  --server HOST[:PORT]    Join a multiplayer server (offline mode) at start\n  --quickPlaySingleplayer WORLD  Open this world of saves/ at start, only if it exists (vanilla's)\n  --quickPlayMultiplayer HOST[:PORT]  The same as --server (vanilla's name)\n  --name NAME             Player name for multiplayer (default: generated once, kept in patina-player.txt)\n  --session-file PATH     Signed-in account from the launcher (read once, then deleted)\n  --session-stdin         The same account as JSON on standard input\n  --game-dir DIR          Game folder: saves, options.txt, packs, mods (default: the working directory)\n  --home DIR              Logs and crash reports (default $PATINA_HOME, else the platform data folder)\n  --fullscreen            Open the window fullscreen\n  --launch-api            Print the Launch API version and options as JSON (docs/api/launch.md)\n  --dev-mod PATH          A content mod (.pmod or folder) to develop: always on\n  --in-frame              DEPRECATED, do not use: unsupported, will be removed soon (also --no-server-thread)\n  --pregen                Add Patina's /pregen command (docs/pregeneration.md)\n\nControls: mouse look, WASD move, Space jump, Left Shift sneak, Left Ctrl sprint,\nleft click break, right click place/use, 1-9/scroll hotbar, E inventory,\nQ drop, F3 debug, Esc pause.",
                         patina_core::VANILLA_VERSION
                     );
                     return Ok(None);
@@ -662,9 +659,6 @@ enum Screen {
     Advancements,
     /// WorldOptionsScreen (game/lan_screen.rs).
     WorldOptions,
-    /// Play with Friends, from the pause menu's Friends button
-    /// (`friends_screen`, game/friends.rs).
-    Friends,
     /// CommandBlockEditScreen (game/command_blocks.rs).
     CommandBlock,
     /// ServerLinksDialogScreen: a server's links (game/server_links.rs).
@@ -1489,14 +1483,11 @@ impl Resources {
     }
 }
 
-/// Everything the title and menus draw: the GUI atlas with its font and the
-/// title panorama. Kept apart from the world bundle so the title can appear
+/// Everything the title and menus draw: the GUI atlas with its font. Kept apart from the world bundle so the title can appear
 /// before the block sprites, models and gameplay tables are ready.
 pub struct UiResources {
     /// The GUI, font, particle, map and skin atlas.
     pub atlas: HudAtlas,
-    /// The title screen's panorama faces.
-    pub panorama: Arc<patina_client::gfx::panorama::Faces>,
 }
 impl UiResources {
     /// From a resource root layering packs over `defaults`, the game's own
@@ -1504,18 +1495,13 @@ impl UiResources {
     pub fn load(root: &std::path::Path, defaults: &std::path::Path) -> Result<Self> {
         Ok(Self {
             atlas: HudAtlas::build_over(root, defaults)?,
-            panorama: Arc::new(patina_client::gfx::panorama::Faces::load(root)),
         })
     }
     /// What a server's game holds, since it draws nothing: the font, which books
-    /// and chat measure with, and a one-pixel panorama.
+    /// and chat measure with.
     pub fn server(root: &std::path::Path) -> Result<Self> {
         Ok(Self {
             atlas: HudAtlas::fonts(root)?,
-            panorama: Arc::new(patina_client::gfx::panorama::Faces {
-                size: 1,
-                pixels: [0u8; 4].repeat(6),
-            }),
         })
     }
 }
@@ -1655,7 +1641,7 @@ struct Game<'a> {
     motion: &'a MotionResources,
     /// This game's resource packs (`reload_packs` replaces them).
     pack: PackResources,
-    /// The title and menu bundle (GUI atlas, font and panorama).
+    /// The title and menu bundle (GUI atlas and font).
     gui: UiResources,
     /// `FogRenderer`'s evolving state.
     fog: patina_client::fog::FogState,
@@ -1663,7 +1649,7 @@ struct Game<'a> {
     /// `LocalPlayer.itemActivation`: the totem flying up to the screen.
     item_activation: patina_client::item_activation::ItemActivation,
     weather_parameters: patina_client::weather::ParameterCache,
-    panorama_rotation: patina_client::gfx::panorama::Rotation,
+    background_clock: patina_client::gfx::backdrop::Clock,
     world: World,
     streaming: Streaming,
     lod: Option<patina_client::lod::Lod>,
@@ -1694,8 +1680,6 @@ struct Game<'a> {
     inv_drag: Option<(i32, Vec<usize>)>,
     /// `AbstractContainerScreen`'s quick craft and skip-release state.
     inv_clicks: patina_client::container_screen::Clicks,
-    /// The Mouse Tweaks extra's drag and wheel (`tweaks`).
-    tweaks: tweaks::Tweaks,
     /// The wheel and hovered slot of `BundleMouseActions`.
     bundle_mouse: bundles::BundleMouse,
     /// The last inventory click, for the double click that gathers a stack.
@@ -1760,9 +1744,6 @@ struct Game<'a> {
     renderer: Option<Renderer>,
     /// CPU geometry storage retained across frames, including empty/title frames.
     entity_vertices: Vec<Vertex>,
-    /// Patina Extras' dynamic lights this frame (`dynamic_lights.rs`), and how brightly each
-    /// item glows (built the first time the extra is on).
-    dynamic_lights: Vec<[f32; 4]>,
     luminance: Option<patina_client::dynamic_light::Luminance>,
     /// Name tags drawn over everything (`RenderPipelines.TEXT_SEE_THROUGH`).
     see_through_vertices: Vec<Vertex>,
@@ -2082,10 +2063,6 @@ struct Game<'a> {
     item_columns: Option<machines::ItemColumns>,
     creative_screen: Creative,
     control: Option<patina_client::control::Server>,
-    /// The Agent Control setting the socket was last opened or closed for (`agent_settings`).
-    agent_control_on: bool,
-    /// When an agent's last command came.
-    agent_last: Option<Instant>,
     frame_stats: patina_client::control::FrameStats,
     /// This play session's frame and tick times, for opt-in performance statistics.
     perf: patina_client::telemetry::Session,
@@ -2094,7 +2071,7 @@ struct Game<'a> {
     pending_bench: Option<(Instant, std::sync::mpsc::Sender<String>)>,
     /// Recent frame times for the performance overlay.
     frame_graph: patina_client::perf_overlay::FrameGraph,
-    /// Patina's extras (minimap, auto-reconnect; mods' counters): `game/extras.rs`.
+    /// What mods' minimap and counters keep: `game/extras.rs`.
     extras: extras::ExtrasState,
     /// Patina mods (`game/mods.rs`), none running unless turned on.
     mods: mods::ModsState,
@@ -2135,8 +2112,6 @@ struct Game<'a> {
     level_shapes: patina_client::chunk::LevelShapes,
     /// This game is that server thread's (game/integrated.rs).
     serving: Option<integrated::Serving>,
-    /// The open world is shared behind an invite code (game/friends.rs).
-    friends: Option<friends::Sharing>,
     world_options: Option<lan_screen::WorldOptions>,
     /// Chat Settings opened from RestrictionsScreen: Done returns to World Options.
     options_to_world_options: bool,
@@ -6255,7 +6230,6 @@ impl Game<'_> {
             });
         }
         patina_client::spans::time("tick_lan", || self.tick_lan(false));
-        self.tick_friends();
         patina_client::spans::time("tick_hand", || self.tick_hand());
         patina_client::spans::time("tick_sleep", || self.tick_sleep());
         self.announce_sleep_status();
@@ -6412,7 +6386,6 @@ impl Game<'_> {
                     | Screen::Stats
                     | Screen::Advancements
                     | Screen::WorldOptions
-                    | Screen::Friends
                     | Screen::ServerLinks
                     | Screen::ConfirmLink
                     | Screen::DialogWarning
@@ -6558,6 +6531,8 @@ impl Game<'_> {
                 Cursor::Arrow => winit::window::CursorIcon::Default,
                 Cursor::PointingHand => winit::window::CursorIcon::Pointer,
                 Cursor::NotAllowed => winit::window::CursorIcon::NotAllowed,
+                Cursor::Move => winit::window::CursorIcon::Move,
+                Cursor::Crosshair => winit::window::CursorIcon::Crosshair,
             });
         }
         self.cursor_icon = effective;
@@ -6727,7 +6702,13 @@ impl Game<'_> {
             self.draw_win_screen(&mut batch);
             return batch;
         }
-        if self.screen == Screen::Options {
+        // The HUD editor over a world shows the game's own HUD under it, as the
+        // Fabric mod's does: what is placed there lines up with the real hotbar.
+        let editing_hud = self.screen == Screen::Options
+            && self.title.is_none()
+            && self.player.is_some()
+            && patina_client::extras_hud::editor_open();
+        if self.screen == Screen::Options && !editing_hud {
             self.draw_options(&mut batch);
             return batch;
         }
@@ -6988,7 +6969,6 @@ impl Game<'_> {
             Screen::Stats => self.draw_stats(&mut batch),
             Screen::Advancements => self.draw_advancements(&mut batch),
             Screen::WorldOptions => self.draw_world_options(&mut batch),
-            Screen::Friends => self.draw_friends_screen(&mut batch),
             Screen::ServerLinks => self.draw_server_links(&mut batch),
             Screen::ConfirmLink => self.draw_confirm_link(&mut batch),
             Screen::DialogWarning => self.draw_dialog_warning(&mut batch),
@@ -7001,6 +6981,7 @@ impl Game<'_> {
                 self.draw_creative(&mut batch);
             }
             Screen::Chat => self.draw_chat_screen(&mut batch),
+            Screen::Options if editing_hud => self.draw_options(&mut batch),
             Screen::Playing | Screen::Options | Screen::Win => {}
         }
         self.draw_saving_indicator(&mut batch);
@@ -7390,7 +7371,6 @@ impl Game<'_> {
             self.draw_inventory_player(batch, ox, oy);
         }
         self.draw_inventory_slots(batch, ox, oy);
-        self.draw_sort_buttons(batch, ox, oy);
         self.draw_recipe_book(batch);
         if let Some(slot) = self.slot_at(batch, self.cursor.0, self.cursor.1) {
             let (sx, sy) = self.slot_position(slot);
@@ -8153,9 +8133,6 @@ impl Game<'_> {
         if self.mod_browser_press(right) {
             return;
         }
-        if !right && self.sort_press() {
-            return;
-        }
         let (slot, outside) = self.inventory_target();
         let shift = self.has_shift_down();
         let target = Target::of(slot, outside);
@@ -8183,9 +8160,6 @@ impl Game<'_> {
                 }
                 None => {}
             }
-            return;
-        }
-        if self.tweak_press(slot, right, shift) {
             return;
         }
         if let Some(slot) = slot
@@ -8288,9 +8262,6 @@ impl Game<'_> {
     }
     /// Mouse movement while a quick craft drag is running.
     fn inventory_drag_move(&mut self) {
-        if self.tweaks_on() && self.tweak_drag_move(self.inventory_target().0) {
-            return;
-        }
         let Some((ty, slots)) = self.inv_drag.clone() else {
             return;
         };
@@ -8417,7 +8388,6 @@ impl Game<'_> {
     /// cancels the drag, drops a stack released outside, or clicks.
     fn inventory_mouse_release(&mut self, right: bool) {
         use patina_client::container_screen::{Release, Target};
-        self.tweak_release();
         let (slot, outside) = self.inventory_target();
         let dragged = self.inv_drag.as_ref().is_some_and(|(_, s)| !s.is_empty());
         let release = self.inv_clicks.release(
@@ -9773,6 +9743,7 @@ impl Game<'_> {
         match action {
             Action::Quit => event_loop.exit(),
             Action::Options => self.open_options(true),
+            Action::PatinaClient => self.open_options_at(true, patina_client::options_ui::Page::Client),
             Action::Accessibility => {
                 self.open_options_at(true, patina_client::options_ui::Page::Accessibility)
             }
@@ -12843,14 +12814,14 @@ impl Game<'_> {
             Vec::new()
         };
         let mut hud = patina_client::spans::time("hud", || self.hud(size));
-        // LevelLoadingScreen (Reason.OTHER) draws the title's panorama.
+        // LevelLoadingScreen (Reason.OTHER) draws the title's background.
         let title = self.title.is_some()
             || self.loading_reason() == Some(patina_client::level_loading::Reason::Other)
             || self.remote_loading();
         let (yaw, pitch) = if title {
-            // PanoramaRenderer: the title cube spins at 0.1 degrees per tick, pitched 10 degrees.
+            // The background's clock, in the frame's yaw.
             (
-                self.panorama_rotation.update(
+                self.background_clock.update(
                     self.started.elapsed().as_secs_f32(),
                     self.settings.file.double("panoramaScrollSpeed") as f32,
                 ),
@@ -12948,11 +12919,6 @@ impl Game<'_> {
             .then(|| self.border_draw(camera.to_array(), alpha as f32))
             .flatten();
         let see_through = std::mem::take(&mut self.see_through_vertices);
-        if title {
-            self.dynamic_lights.clear();
-        } else {
-            self.gather_dynamic_lights(camera, alpha);
-        }
         let pack_inputs = if title {
             Default::default()
         } else {
@@ -13031,7 +12997,7 @@ impl Game<'_> {
             entities: &entities,
             entity_spans: &entity_spans,
             glowing: &glowing,
-            dynamic_lights: &self.dynamic_lights,
+            dynamic_lights: &[],
             lightning: patina_client::gfx::lightning::Input {
                 bolts: &bolts,
                 uv: patina_client::gfx::lightning::white_uv(&self.gui.atlas.font.white()),
@@ -13123,7 +13089,7 @@ impl Game<'_> {
         let atlas = &self.gui.atlas;
         let (w, h) = (batch.width, batch.height);
         match reason {
-            // The panorama and its blur are drawn by the renderer.
+            // The background and its blur are drawn by the renderer.
             Reason::Other => {
                 patina_client::ui::menu_background(batch, atlas, 0.0, 0.0, w, h, false)
             }
@@ -13143,9 +13109,13 @@ impl Game<'_> {
         };
         level_loading::draw(batch, atlas, Some(&status), Some(self.loading_progress));
     }
-    /// `Screen.extractBlurredBackground` over the panorama or the world and
+    /// `Screen.extractBlurredBackground` over the background or the world and
     /// HUD, when `menuBackgroundBlurriness` is at least 1.
     fn menu_blur(&self) -> Option<f32> {
+        // The HUD editor shows the world as it is in game.
+        if patina_client::extras_hud::editor_open() {
+            return None;
+        }
         let loading = self.loading_reason() == Some(patina_client::level_loading::Reason::Other)
             || self.remote_loading();
         let blurred = loading
@@ -13209,9 +13179,6 @@ impl Game<'_> {
             }
             return Ok(());
         }
-        if self.sort_key_press(key) {
-            return Ok(());
-        }
         if self.remote.is_some() && self.remote_key(key)? {
             return Ok(());
         }
@@ -13236,7 +13203,7 @@ impl Game<'_> {
                 }
                 Screen::GameModeSwitcher => self.close_gamemode_switcher(false),
                 Screen::Dead => {}
-                Screen::Stats | Screen::Friends => self.screen = Screen::Paused,
+                Screen::Stats => self.screen = Screen::Paused,
                 Screen::ServerLinks => self.screen = Screen::Paused,
                 // ConfirmScreen.keyPressed: Escape answers no; both return to
                 // the Server Links screen they came from.
@@ -14010,11 +13977,7 @@ impl ApplicationHandler for Game<'_> {
                     if self.screen == Screen::Creative && d != 0.0 && !bundle {
                         self.creative_screen.wheel(f64::from(d), &self.pack.names);
                     }
-                    if self.screen == Screen::Inventory
-                        && d != 0.0
-                        && !bundle
-                        && !self.tweak_scroll(d, self.inventory_target().0)
-                    {
+                    if self.screen == Screen::Inventory && d != 0.0 && !bundle {
                         self.station_scroll(d);
                     }
                     if self.screen == Screen::Stats && d != 0.0 {
@@ -14143,9 +14106,6 @@ impl ApplicationHandler for Game<'_> {
                         // Neither edge of a bound button is an ordinary slot click.
                         return Ok(());
                     }
-                    if pressed && self.sort_mouse_press(button) {
-                        return Ok(());
-                    }
                     match self.screen {
                         Screen::Playing => {
                             if pressed && !self.captured {
@@ -14230,9 +14190,6 @@ impl ApplicationHandler for Game<'_> {
                         }
                         Screen::WorldOptions if button == MouseButton::Left => {
                             self.world_options_release()
-                        }
-                        Screen::Friends if pressed && button == MouseButton::Left => {
-                            self.friends_screen_click()
                         }
                         Screen::CommandBlock if pressed && button == MouseButton::Left => {
                             self.command_block_click()
@@ -14534,8 +14491,6 @@ impl ApplicationHandler for Game<'_> {
                     let updated = Instant::now();
                     self.track_toggle_screens();
                     // For the "I'm playing" ping: an atomic, sent on when it changes.
-                    patina_client::heartbeat::set_lan(self.is_published());
-                    self.update_discord_presence();
                     let steps = self.clock.advance(elapsed);
                     // The world ticking in the frame: once its ticks took a
                     // tick's length, the rest are dropped (`FixedStep::tick_fits`).
@@ -14572,7 +14527,6 @@ impl ApplicationHandler for Game<'_> {
                         }
                     }
                     self.extras_frame(elapsed);
-                    self.extras_retry()?;
                     self.apply_mouse_look();
                     self.pad_look(elapsed.as_secs_f32());
                     self.advance_flight();
@@ -14880,7 +14834,7 @@ impl<'a> Game<'a> {
             screen_fx: Default::default(),
             item_activation: Default::default(),
             weather_parameters: Default::default(),
-            panorama_rotation: Default::default(),
+            background_clock: Default::default(),
             world,
             streaming,
             lod: None,
@@ -14904,7 +14858,6 @@ impl<'a> Game<'a> {
             craft_size: 2,
             craft_table: None,
             inv_drag: None,
-            tweaks: Default::default(),
             bundle_mouse: Default::default(),
             inv_clicks: Default::default(),
             last_inv_click: None,
@@ -14948,7 +14901,6 @@ impl<'a> Game<'a> {
             window: None,
             renderer: None,
             entity_vertices: Vec::new(),
-            dynamic_lights: Vec::new(),
             luminance: None,
             see_through_vertices: Vec::new(),
             entity_spans: Default::default(),
@@ -15148,8 +15100,6 @@ impl<'a> Game<'a> {
             item_columns: None,
             creative_screen: prepared.creative_screen,
             control: None,
-            agent_control_on: false,
-            agent_last: None,
             frame_stats: Default::default(),
             perf: Default::default(),
             pending_screenshot: None,
@@ -15179,7 +15129,6 @@ impl<'a> Game<'a> {
             world_options: None,
             options_to_world_options: false,
             command_block_screen: None,
-            friends: None,
             debug_keys: Default::default(),
             debug_charts: Default::default(),
             show_hitboxes: false,
@@ -15633,14 +15582,14 @@ fn load_resources(
 ) -> Result<Loaded> {
     let requested_root = root.clone();
     let threads = settings.patina.worker_threads();
-    // Stage A: the menu bundle (atlas and panorama). With a loading screen it is
+    // Stage A: the menu bundle (the atlas). With a loading screen it is
     // published at once so the title screen can appear while the world bundle
     // loads; the synchronous launch instead carries it in `Loaded`.
     let mut loaded_gui = None;
     let mut ui_ready = false;
     let mut pack_error = None;
     // A dedicated server builds only the font (UiResources::server), as the
-    // integrated server's game does: the full atlas and panorama are 144 MB.
+    // integrated server's game does: the full atlas is over 100 MB.
     let load_ui = |root: &std::path::Path| {
         if headless {
             UiResources::server(root)
@@ -16003,7 +15952,6 @@ fn build_renderer(
             atlas.glint_armor.2,
         ),
         (&pack.forcefield.2, pack.forcefield.0),
-        &gui.panorama,
         prepared,
         previous,
         api,
@@ -16017,27 +15965,25 @@ fn build_renderer(
 }
 
 /// The loading screen's renderer: the real HUD atlas and font over one opaque
-/// white block-sprite layer, an empty border texture and the title panorama
-/// once the menu bundle is ready.
+/// white block-sprite layer, an empty border texture
+/// once the menu bundle is ready. Until then the atlas is the boot splash's
+/// `sheet`, the one thing the first frame needs.
 fn loading_renderer(
     window: Arc<Window>,
     offscreen: bool,
     gui: Option<&UiResources>,
+    sheet: Option<&(Vec<u8>, u32, u32)>,
     previous: Option<&Renderer>,
     api: patina_client::graphics::GraphicsApi,
 ) -> Result<Renderer> {
     static FORCEFIELD: [u8; 4] = [0; 4];
     static EMPTY_HUD: [u8; 4] = [0, 0, 0, 255];
     static EMPTY_GLINT: [u8; 4] = [0; 4];
-    let empty_panorama = patina_client::gfx::panorama::Faces {
-        size: 1,
-        pixels: [0u8; 4].repeat(6),
-    };
-    let panorama = gui.map_or(&empty_panorama, |gui| gui.panorama.as_ref());
     let atlas = gui.map(|gui| &gui.atlas);
-    let (pixels, width, height) = match atlas {
-        Some(atlas) => (atlas.pixels.as_slice(), atlas.width, atlas.height),
-        None => (EMPTY_HUD.as_slice(), 1, 1),
+    let (pixels, width, height) = match (atlas, sheet) {
+        (Some(atlas), _) => (atlas.pixels.as_slice(), atlas.width, atlas.height),
+        (None, Some((pixels, width, height))) => (pixels.as_slice(), *width, *height),
+        (None, None) => (EMPTY_HUD.as_slice(), 1, 1),
     };
     let (glint_pixels, glint_width, glint_height) = match atlas {
         Some(atlas) => (atlas.glint.0.as_slice(), atlas.glint.1, atlas.glint.2),
@@ -16062,7 +16008,6 @@ fn loading_renderer(
         (glint_pixels, glint_width, glint_height),
         (glint_pixels, glint_width, glint_height),
         (&FORCEFIELD[..], 1),
-        panorama,
         None,
         previous,
         api,
@@ -16073,11 +16018,13 @@ fn loading_renderer(
             .iter()
             .map(|(rect, animation)| (*rect, animation.clone(), (usize::MAX, 0, 0)))
             .collect();
+    } else if sheet.is_some() {
+        renderer.filter_hud_linearly();
     }
     Ok(renderer)
 }
 
-/// A title-shaped frame: black clear and panorama, only the HUD is drawn.
+/// A title-shaped frame: the title background, only the HUD is drawn.
 fn loading_frame(hud: &HudBatch) -> Frame<'_> {
     Frame {
         weather: &[],
@@ -16317,7 +16264,6 @@ fn run_event_loop(mut game: Game<'_>) -> Result<()> {
     let result = EventLoop::new()?.run_app(&mut game);
     leave_fullscreen_after(&result, &mut game.settings);
     result?;
-    patina_client::discord_presence::stop();
     write_report(&game)?;
     if let Some(e) = game.error.take() {
         return Err(e);
@@ -16336,7 +16282,7 @@ struct Loading {
     vanilla_root: PathBuf,
     pack_error: Option<String>,
     started: Instant,
-    panorama_rotation: patina_client::gfx::panorama::Rotation,
+    background_clock: patina_client::gfx::backdrop::Clock,
     progress: Progress,
     receiver: Receiver<LoaderMsg>,
     loaded: Option<std::result::Result<Loaded, String>>,
@@ -16346,6 +16292,15 @@ struct Loading {
     shown: bool,
     menu: startup_menu::StartupMenu,
     error: Option<Box<dyn std::error::Error>>,
+    /// The boot splash, until the title screen has faded in.
+    splash: Option<patina_client::boot_splash::Splash>,
+    /// Its sheet, the first renderer's atlas.
+    sheet: Option<(Vec<u8>, u32, u32)>,
+    /// The menu bundle, kept back while the logo fades out.
+    held_ui: Option<(UiResources, PathBuf)>,
+    /// `PATINA_SPLASH_SHOTS`: a folder to save the splash's frames to, and when the last one
+    /// was taken.
+    splash_shots: Option<(PathBuf, Instant)>,
 }
 impl Loading {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -16387,6 +16342,7 @@ impl Loading {
             window.clone(),
             offscreen,
             self.gui.as_ref(),
+            self.sheet.as_ref(),
             None,
             self.settings.patina.api,
         ) {
@@ -16411,7 +16367,7 @@ impl Loading {
         }
     }
     /// The menu bundle arrived: rebuild the loading screen with the real atlas
-    /// and title panorama.
+    /// and title background.
     fn set_ui(&mut self, gui: UiResources, root: PathBuf) {
         log::info!(
             "Patina: loading the title artwork after {} ms",
@@ -16428,10 +16384,12 @@ impl Loading {
         if let Some(renderer) = &mut self.renderer {
             renderer.release_surface();
         }
+        self.sheet = None;
         match loading_renderer(
             window,
             offscreen,
             self.gui.as_ref(),
+            None,
             self.renderer.as_ref(),
             self.settings.patina.api,
         ) {
@@ -16459,6 +16417,7 @@ impl Loading {
             event_loop.exit();
             return;
         }
+        self.advance_splash();
         if let Some(w) = &self.window {
             if self.options.as_ref().is_some_and(|o| o.offscreen) {
                 self.draw();
@@ -16477,9 +16436,30 @@ impl Loading {
             return;
         };
         let mut batch = HudBatch::new(size);
-        self.draw_menu(&mut batch);
+        let now = Instant::now();
+        if let Some(splash) = &mut self.splash {
+            splash.begin(now);
+        }
+        let stage = self.splash.as_ref().map(|splash| splash.stage(now));
+        match (stage, &self.splash) {
+            (Some(Stage::Logo(opacity)), Some(splash)) => splash.draw(&mut batch, now, opacity),
+            (Some(Stage::Swap), _) => {}
+            (Some(Stage::Reveal(black)), _) => {
+                self.draw_menu(&mut batch);
+                if let Some(gui) = &self.gui {
+                    let color = rgba(0, 0, 0, (black * 255.0).round() as u8);
+                    let (w, h) = (batch.width, batch.height);
+                    batch.fill(&gui.atlas, 0.0, 0.0, w, h, color);
+                }
+            }
+            _ => self.draw_menu(&mut batch),
+        }
+        self.request_splash_shot(now);
+        if let Some(renderer) = &mut self.renderer {
+            renderer.splash_showing = matches!(stage, Some(Stage::Logo(_) | Stage::Swap));
+        }
         let mut frame = loading_frame(&batch);
-        frame.yaw = self.panorama_rotation.update(
+        frame.yaw = self.background_clock.update(
             self.started.elapsed().as_secs_f32(),
             self.settings.file.double("panoramaScrollSpeed") as f32,
         );
@@ -16498,6 +16478,44 @@ impl Loading {
                 "Patina: loading screen shown after {} ms",
                 self.started.elapsed().as_millis()
             );
+        }
+    }
+    /// Moves the splash along: when the menu bundle is in, the logo fades, the bundle goes
+    /// behind the black and the black fades.
+    fn advance_splash(&mut self) {
+        let Some(mut splash) = self.splash else {
+            return;
+        };
+        if self.held_ui.is_some() || self.loaded.is_some() {
+            splash.menu_ready(Instant::now());
+        }
+        let stage = splash.stage(Instant::now());
+        if stage == Stage::Swap {
+            if let Some((gui, root)) = self.held_ui.take() {
+                self.set_ui(gui, root);
+            }
+            splash.swapped(Instant::now());
+        }
+        self.splash = (stage != Stage::Done).then_some(splash);
+    }
+    /// The test hook behind `PATINA_SPLASH_SHOTS`: a frame every 200 ms while the splash runs
+    /// and the title's opening motion plays after it, up to 12 s from the start.
+    /// The splash has no control socket, which starts the game without it.
+    fn request_splash_shot(&mut self, now: Instant) {
+        let (Some((dir, last)), Some(renderer), true) = (
+            &mut self.splash_shots,
+            &mut self.renderer,
+            self.splash.is_some() || now.duration_since(self.started).as_secs() < 12,
+        ) else {
+            return;
+        };
+        if now.duration_since(*last) >= Duration::from_millis(200) {
+            *last = now;
+            let ms = now.duration_since(self.started).as_millis();
+            renderer.screenshot = Some(patina_client::gfx::ScreenshotRequest {
+                path: dir.join(format!("splash-{ms:05}.png")),
+                size: None,
+            });
         }
     }
     fn finish(&mut self, loaded: Loaded) -> Result<Option<Game<'static>>> {
@@ -16560,7 +16578,7 @@ impl Loading {
         game.renderer = Some(renderer);
         game.world_renderer_ready = true;
         game.fullscreen = self.fullscreen;
-        game.panorama_rotation = self.panorama_rotation;
+        game.background_clock = self.background_clock;
         self.menu.handoff(&mut game);
         game.apply_settings();
         game.previous = Instant::now();
@@ -16616,7 +16634,10 @@ impl ApplicationHandler for App {
                     event_loop.exit();
                     return;
                 }
-                match if loading.menu.reload_packs {
+                // A failed load ends the splash; a finished one waits for its fade.
+                let splash_runs =
+                    loading.splash.is_some() && matches!(loading.loaded, Some(Ok(_)));
+                match if loading.menu.reload_packs || splash_runs {
                     None
                 } else {
                     loading.loaded.take()
@@ -16680,6 +16701,8 @@ fn run_loading(
     let (receiver, loader) =
         startup_menu::spawn_loader(&options, &settings, &vanilla_root, started, &progress)?;
     let menu = startup_menu::StartupMenu::new(&options, pack_error.as_deref())?;
+    let sheet = patina_client::boot_splash::sheet()?;
+    let splash_shots = std::env::var_os("PATINA_SPLASH_SHOTS").map(|dir| (dir.into(), started));
     let loading = Loading {
         window: None,
         renderer: None,
@@ -16690,7 +16713,7 @@ fn run_loading(
         vanilla_root,
         pack_error,
         started,
-        panorama_rotation: Default::default(),
+        background_clock: Default::default(),
         progress,
         receiver,
         loaded: None,
@@ -16699,6 +16722,10 @@ fn run_loading(
         shown: false,
         menu,
         error: None,
+        splash: Some(Splash::new()),
+        sheet: Some(sheet),
+        held_ui: None,
+        splash_shots,
     };
     let mut app = App::Loading(Box::new(loading));
     let result = EventLoop::new()?.run_app(&mut app);
@@ -16707,7 +16734,6 @@ fn run_loading(
         App::Loading(loading) => leave_fullscreen_after(&result, &mut loading.settings),
     }
     result?;
-    patina_client::discord_presence::stop();
     match app {
         App::Ready(mut game) => {
             write_report(&game)?;
@@ -16751,6 +16777,9 @@ pub fn run() -> Result<()> {
     }
     let started = Instant::now();
     patina_client::spans::enable(options.spikes.is_some());
+    if options.execution_role.is_client() {
+        patina_client::client_settings::init(&std::env::current_dir()?);
+    }
     let vanilla_root = options.resources.clone();
     if let Some(error) = missing_resources(&vanilla_root) {
         // The game build started by hand (the release's zip), not by the
@@ -16925,7 +16954,7 @@ mod startup_cpu_tests {
             .expect("no manifest is reported");
         assert!(missing.contains("patina-resources.json"), "{missing}");
         assert!(missing.contains("patina-unprepared-"), "{missing}");
-        assert!(missing.contains("launcher"), "{missing}");
+        assert!(missing.contains("started from Patina"), "{missing}");
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("patina-resources.json"), "{}").unwrap();
         assert_eq!(missing_resources(&root), None);

@@ -8,7 +8,7 @@ pub const DIR: &str = "shaderpacks";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
-    /// A folder with `patina-shaders.toml`, or a `.hshader`.
+    /// A folder with `patina-shaders.toml`, or a `.pshader`.
     Patina,
     /// A folder with a `shaders` folder, or a `.zip`.
     Classic,

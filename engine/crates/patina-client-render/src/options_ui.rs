@@ -8,6 +8,7 @@ pub use crate::settings::Opt;
 
 use crate::{
     gamepad::{self, GlyphStyle},
+    graphics_ui::Gfx,
     hud::{HudAtlas, HudBatch, rgba},
     keybinds::{self, CATEGORIES, KeyBinds, MAPPINGS},
     lang::{self, LanguageInfo},
@@ -76,7 +77,6 @@ pub(crate) const ACCESSIBILITY_OPTIONS: &[Opt] = &[
     Opt::GlintSpeed,
     Opt::GlintStrength,
     Opt::HideLightningFlashes,
-    Opt::MonochromeLogo,
     Opt::PanoramaSpeed,
     Opt::HideSplashTexts,
     Opt::NarratorHotkey,
@@ -252,7 +252,7 @@ impl Opt {
             Opt::NotificationDisplayTime => "options.notifications.display_time",
             Opt::Narrator => "options.narrator",
             Opt::TextBackground => "options.accessibility.text_background",
-            Opt::ChatDelay => "patina.options.chat_delay",
+            Opt::ChatDelay => "options.chat.delay",
             Opt::DistortionEffects => "options.screenEffectScale",
             Opt::FovEffects => "options.fovEffectScale",
             Opt::DarknessPulsing => "options.darknessEffectScale",
@@ -299,6 +299,7 @@ impl Opt {
             Opt::SharePresence => "options.sharePresence",
             Opt::DirectionalAudio => "options.directionalAudio",
             Opt::MusicToast => "options.musicToast",
+            Opt::Graphics(g) => g.caption(),
         }
     }
     pub(crate) fn kind(self, s: &Settings) -> Kind {
@@ -348,6 +349,7 @@ impl Opt {
             Opt::PadMoveDeadzone => unit(s.controller.move_deadzone, 0.0, 0.5),
             Opt::PadLookDeadzone => unit(s.controller.look_deadzone, 0.0, 0.5),
             Opt::SprintWindow => unit(s.sprint_window as f32, 0.0, 10.0),
+            Opt::Graphics(g) => g.slider(s).map_or(Kind::Cycle, Kind::Slider),
             _ => Kind::Cycle,
         }
     }
@@ -381,6 +383,7 @@ impl Opt {
     pub fn label(self, s: &Settings) -> Text {
         let c = self.caption();
         match self {
+            Opt::Graphics(g) => generic(c, g.value(s)),
             Opt::ChatDelay => tr("options.chat.delay_none"),
             Opt::FovEffects
             | Opt::DarknessPulsing
@@ -714,6 +717,7 @@ impl Opt {
                 self.file_key().unwrap(),
                 crate::options_file::V::Double(f64::from(v)),
             ),
+            Opt::Graphics(g) => g.set_slider(s, v),
             Opt::Fov => s.fov = step(30.0, 110.0),
             Opt::RenderDistance => {
                 s.render_distance =
@@ -785,6 +789,7 @@ impl Opt {
             }
         };
         match self {
+            Opt::Graphics(g) => g.cycle(s, back),
             Opt::GuiScale => {
                 let max = crate::window::calculate_scale(framebuffer, 0, s.force_unicode) as u32;
                 let value = s.gui_scale.min(max);
@@ -1011,9 +1016,6 @@ pub fn apply_preset(s: &mut Settings) {
     }
 }
 
-/// `selected_key` while a native mod's key waits (`selected_native_key`).
-const NATIVE_KEY: &str = "patina.nativeModKey";
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Page {
     Main,
@@ -1027,30 +1029,19 @@ pub enum Page {
     Language,
     Font,
     Packs,
-    Mods,
-    /// A native mod's settings page: its index in `mods.installed`.
-    NativeMod(usize),
-    /// Patina's shader packs, either kind (`shader_pack_list`).
+    /// The shader packs in `shaderpacks/`, either kind (`shader_pack_list`).
     ShaderPacks,
-    /// Patina's graphics settings (`graphics_ui`).
-    Graphics,
-    GraphicsAdvanced,
-    GraphicsHdr,
-    /// Patina's controller settings and button binds.
+    /// The controller's settings and button binds.
     Controller,
     PadBinds,
-    Extras,
     /// CreditsAndAttributionScreen.
     Credits,
-    /// Patina Settings: every page Patina adds, as a mod's settings
-    /// screen hangs off vanilla's Options.
-    Patina,
-    /// AI Agent: agent control on or off, whether an agent is connected, the connection details.
-    Agent,
     /// SkinCustomizationScreen: the skin layers and Main Hand.
     Skin,
     /// OnlineOptionsScreen: server listing, Realms and friends notifications.
     Online,
+    /// The Patina Client settings (`client_screen`).
+    Client,
 }
 #[derive(Clone, Debug, PartialEq)]
 enum Act {
@@ -1058,7 +1049,6 @@ enum Act {
     Push(Page),
     Done,
     Cycle(Opt),
-    Extra(crate::extras::Item),
     Key(&'static str),
     ResetKey(&'static str),
     ResetKeys,
@@ -1066,19 +1056,11 @@ enum Act {
     PadKey(&'static str),
     ResetPadKey(&'static str),
     ResetPadKeys,
-    ToggleMod(usize),
     /// Pick `s.shader_packs[i]`, or turn it off when it is the pick.
     PickShaderPack(usize),
     OpenShaderPackFolder,
-    /// The installed native mod's settings page.
-    ModSettings(usize),
-    /// A native mod's key (mod, key) waits for a key; a button of its page.
-    NativeKey(usize, usize),
-    NativeButton(usize, usize),
-    OpenModFolder,
     /// Credits & Attribution's Credits button (WinScreen without the poem).
     Credits,
-    CopyAgentDetails,
 }
 enum WKind {
     Button {
@@ -1134,22 +1116,13 @@ pub enum Event {
     OpenPackFolder,
     /// Data Packs' Open Pack Folder: create the folder if needed and open it.
     OpenDataPackFolder(std::path::PathBuf),
-    OpenModFolder,
     /// The Shader Packs page opened: list `shaderpacks/` into `shader_packs`.
     ListShaderPacks,
     /// A shader pack was picked or turned off: save and apply it.
     ShaderPack,
     OpenShaderPackFolder,
-    /// Native mod `.0`'s page opened: the game asks the mod for its labels
-    /// again (they were made with the list, maybe in another language).
-    NativeSettings(usize),
-    /// Button `.1` of native mod `.0`'s page was pressed: the game tells the
-    /// mod and refreshes the page.
-    NativeButton(usize, usize),
     /// Roll the credits (`CreditsAndAttributionScreen.openCreditsScreen`).
     Credits,
-    /// Copy how an agent connects (the AI Agent page).
-    CopyAgentDetails,
 }
 /// `SliderableValueSet.applyValueImmediately`: these apply 600 ms after
 /// the last change (`OptionInstanceSliderButton.delayedApplyAt`).
@@ -1178,11 +1151,8 @@ pub struct OptionsUi {
     slider_value: Option<(Opt, f32, Instant)>,
     /// The pointer's last y while a scrollbar is held.
     pub(crate) scrollbar_drag_y: Option<f32>,
-    /// Key Binds: the mapping waiting for a key ([`NATIVE_KEY`]: a native
-    /// mod's, `selected_native_key`).
+    /// Key Binds: the mapping waiting for a key.
     pub selected_key: Option<&'static str>,
-    /// The native mod's key waiting: (mod, key) in `mods.installed`.
-    selected_native_key: Option<(usize, usize)>,
     /// Controller Binds: the action waiting for a pad button.
     pub selected_pad_action: Option<&'static str>,
     /// The glyphs the binds list shows (the setting, else the pad's family).
@@ -1190,7 +1160,6 @@ pub struct OptionsUi {
     pub languages: Vec<LanguageInfo>,
     language_choice: Option<String>,
     language_search: ui::EditBox,
-    pub(crate) settings_search: ui::EditBox,
     /// Packs: the packs found and the selection the screen opens with.
     pub pack_infos: Vec<crate::pack_screen::PackInfo>,
     pub pack_selection: Vec<String>,
@@ -1210,16 +1179,12 @@ pub struct OptionsUi {
     pub in_world: bool,
     /// Scroll the selected language into the middle on the next layout.
     center_language: bool,
-    pub graphics: crate::graphics_ui::GraphicsUi,
-    /// The AI Agent page's status lines (set by the game while it shows).
-    pub agent_status: Vec<String>,
+    client: crate::client_screen::ClientScreen,
 }
 impl Default for OptionsUi {
     fn default() -> Self {
         let mut search = ui::EditBox::new(0.0, 0.0, 200.0, 15.0);
         search.max_length = 32;
-        let mut settings_search = ui::EditBox::new(0.0, 0.0, 200.0, 15.0);
-        settings_search.focused = false;
         Self {
             stack: vec![Page::Main],
             scroll: 0.0,
@@ -1227,13 +1192,11 @@ impl Default for OptionsUi {
             slider_value: None,
             scrollbar_drag_y: None,
             selected_key: None,
-            selected_native_key: None,
             selected_pad_action: None,
             pad_style: GlyphStyle::Xbox,
             languages: Vec::new(),
             language_choice: None,
             language_search: search,
-            settings_search,
             pack_infos: Vec::new(),
             pack_selection: Vec::new(),
             pack_screen: None,
@@ -1244,8 +1207,7 @@ impl Default for OptionsUi {
             pack_focus: Instant::now(),
             in_world: false,
             center_language: false,
-            graphics: Default::default(),
-            agent_status: Vec::new(),
+            client: Default::default(),
         }
     }
 }
@@ -1289,27 +1251,11 @@ fn option_widget(s: &Settings, opt: Opt, x: f32, y: f32, w: f32) -> Widget {
         Kind::Cycle => button(x, y, w, opt.label(s), Act::Cycle(opt)),
     }
 }
-/// What a button opening one of Patina's pages says on hover.
-fn patina_page_tooltip(page: Page) -> Option<&'static str> {
-    Some(match page {
-        Page::Patina => "patina.pages.settings.tooltip",
-        Page::Graphics => "patina.pages.graphics.tooltip",
-        Page::GraphicsAdvanced => "patina.pages.graphics_advanced.tooltip",
-        Page::Controller => "patina.pages.controller.tooltip",
-        Page::Extras => "patina.pages.extras.tooltip",
-        Page::Agent => "patina.pages.agent.tooltip",
-        Page::ShaderPacks => "patina.pages.shader_packs.tooltip",
-        Page::Mods => "patina.pages.mods.tooltip",
-        _ => return None,
-    })
-}
 /// Rows of an OptionsList: (big?, options) or a header.
 enum Row {
     Big(Opt),
     Pair(Opt, Option<Opt>),
     Header(&'static str),
-    /// A line of grey text (a path).
-    Note(String),
     Buttons(Widget, Option<Widget>),
 }
 fn pairs(opts: &[Opt]) -> Vec<Row> {
@@ -1318,15 +1264,6 @@ fn pairs(opts: &[Opt]) -> Vec<Row> {
         .collect()
 }
 impl OptionsUi {
-    /// A switch of `patina-extras.txt` as the Extras page draws it: "Caption: On".
-    fn extra_button(&self, s: &Settings, item: crate::extras::Item) -> Widget {
-        let label = format!("{}: {}", item.caption(), item.value(&s.extras));
-        button(0.0, 0.0, 150.0, Text::literal(label), Act::Extra(item))
-    }
-    fn settings_search_active(&self) -> bool {
-        self.settings_search.focused
-            && matches!(self.page(), Page::Video | Page::Controls | Page::KeyBinds)
-    }
     pub fn page(&self) -> Page {
         *self.stack.last().unwrap_or(&Page::Main)
     }
@@ -1389,10 +1326,6 @@ impl OptionsUi {
         self.stack.push(page);
         self.scroll = 0.0;
         self.scrollbar_drag_y = None;
-        if matches!(page, Page::Video | Page::Controls | Page::KeyBinds) {
-            self.settings_search.set_value("");
-            self.settings_search.focused = false;
-        }
         if page == Page::Language {
             self.language_choice = None;
             self.language_search.set_value("");
@@ -1400,21 +1333,6 @@ impl OptionsUi {
         }
         if page == Page::Packs {
             self.pack_screen = None;
-        }
-        if matches!(
-            page,
-            Page::Graphics | Page::GraphicsAdvanced | Page::GraphicsHdr
-        ) {
-            self.graphics.reset();
-        }
-    }
-    /// The graphics screen level of `page`, if it is one.
-    fn graphics_level(page: Page) -> Option<crate::graphics_ui::Level> {
-        match page {
-            Page::Graphics => Some(crate::graphics_ui::Level::Simple),
-            Page::GraphicsAdvanced => Some(crate::graphics_ui::Level::Advanced),
-            Page::GraphicsHdr => Some(crate::graphics_ui::Level::Hdr),
-            _ => None,
         }
     }
     fn title(page: Page) -> &'static str {
@@ -1432,16 +1350,11 @@ impl OptionsUi {
             Page::Language => "options.language.title",
             Page::Font => "options.font.title",
             Page::Packs => "resourcePack.title",
-            Page::Mods => "patina.pages.mods",
-            Page::NativeMod(_) => "Mod Settings",
             Page::ShaderPacks => "patina.pages.shader_packs",
-            Page::Graphics | Page::GraphicsAdvanced | Page::GraphicsHdr => "options.videoTitle",
             Page::Controller => "patina.pages.controller",
             Page::PadBinds => "patina.pages.controller_binds",
-            Page::Extras => "patina.pages.extras",
             Page::Credits => "credits_and_attribution.screen.title",
-            Page::Patina => "patina.pages.settings",
-            Page::Agent => "patina.pages.agent",
+            Page::Client => "patina.client.title",
         }
     }
     fn scrollbar_x(&self, width: f32) -> f32 {
@@ -1452,193 +1365,50 @@ impl OptionsUi {
                 _ => 163.0,
             }
     }
-    fn filter_option_rows(&self, rows: Vec<Row>) -> Vec<Row> {
-        let query = self.settings_search.value.to_lowercase();
-        if query.is_empty() {
-            return rows;
-        }
-        let mut filtered = Vec::new();
-        let mut pending_header = None;
-        for row in rows {
-            let matches = |opt: Opt| lang::get(opt.caption()).to_lowercase().contains(&query);
-            let visible = match row {
-                Row::Header(key) => {
-                    pending_header = Some(key);
-                    continue;
-                }
-                Row::Big(opt) if matches(opt) => vec![Row::Big(opt)],
-                Row::Pair(a, b) => pairs(
-                    &[Some(a), b]
-                        .into_iter()
-                        .flatten()
-                        .filter(|opt| matches(*opt))
-                        .collect::<Vec<_>>(),
-                ),
-                // Keep navigation available regardless of the query.
-                Row::Buttons(a, b) => {
-                    filtered.push(Row::Buttons(a, b));
-                    continue;
-                }
-                _ => Vec::new(),
-            };
-            if !visible.is_empty() {
-                // Emit a section heading only when its first matching option is found.
-                if let Some(key) = pending_header.take() {
-                    filtered.push(Row::Header(key));
-                }
-                filtered.extend(visible);
-            }
-        }
-        filtered
-    }
-
-    /// A native mod's page: its name, its keys as Key Binds rows (the
-    /// player's choice, else the default), then its buttons.
-    fn native_rows(&self, s: &Settings, i: usize) -> Vec<Row> {
-        let Some(m) = s.mods.installed.get(i) else {
-            return Vec::new();
-        };
-        let mut rows = vec![Row::Note(m.title.clone())];
-        let Some(page) = &m.native else {
-            return rows;
-        };
-        let chosen = s.mods.keys.get(&m.id);
-        for (k, [name, label, default]) in page.keys.iter().enumerate() {
-            let key = chosen.and_then(|c| c.get(name)).unwrap_or(default);
-            let mut message = keybinds::display_name(key);
-            if self.selected_native_key == Some((i, k)) {
-                message = Text::literal("> ")
-                    .append(message.with_color(text::WHITE))
-                    .append(" <")
-                    .with_color(text::YELLOW);
-            }
-            let caption = button(0.0, 0.0, 150.0, Text::literal(label.clone()), Act::None);
-            let change = button(0.0, 0.0, 150.0, message, Act::NativeKey(i, k));
-            rows.push(Row::Buttons(inactive(caption), Some(change)));
-        }
-        for (b, label) in page.buttons.iter().enumerate() {
-            let widget = button(
-                0.0,
-                0.0,
-                310.0,
-                Text::literal(label.clone()),
-                Act::NativeButton(i, b),
-            );
-            rows.push(Row::Buttons(widget, None));
-        }
-        rows
-    }
-
     fn list_rows(&self, s: &Settings) -> Vec<Row> {
         match self.page() {
-            Page::Extras => {
-                // Each section's switches two to a row, as vanilla's
-                // OptionsList.addSmall lays out an options screen.
-                let extra = |item: crate::extras::Item| {
-                    let value = format!("{}: {}", item.caption(), item.value(&s.extras));
-                    let label = if item.key_name().is_some() && self.selected_key == item.key_name()
-                    {
-                        Text::literal(format!("> {value} <")).with_color(text::YELLOW)
-                    } else {
-                        Text::literal(value)
-                    };
-                    let widget = button(0.0, 0.0, 150.0, label, Act::Extra(item));
-                    // A setting of a switch that is off does nothing: inactive,
-                    // as vanilla greys out an option that can't apply.
-                    if item
-                        .parent()
-                        .is_some_and(|parent| parent.switch(&s.extras) == Some(false))
-                    {
-                        inactive(widget)
-                    } else {
-                        widget
-                    }
-                };
-                let mut rows = Vec::new();
-                let mut section = Vec::new();
-                let flush = |rows: &mut Vec<Row>, section: &mut Vec<crate::extras::Item>| {
-                    rows.extend(
-                        section
-                            .chunks(2)
-                            .map(|c| Row::Buttons(extra(c[0]), c.get(1).map(|&b| extra(b)))),
-                    );
-                    section.clear();
-                };
-                for row in crate::extras::rows() {
-                    match row {
-                        Err(header) => {
-                            flush(&mut rows, &mut section);
-                            rows.push(Row::Header(header));
-                        }
-                        Ok(item) => section.push(item),
-                    }
-                }
-                flush(&mut rows, &mut section);
-                rows
-            }
-            Page::Patina => {
-                // Two to a row, as vanilla's OptionsList.addSmall lays out
-                // buttons; each opens a page built from vanilla's widgets.
-                let open =
-                    |key: &str, page: Page| button(0.0, 0.0, 150.0, tr(key), Act::Push(page));
-                vec![
-                    Row::Buttons(
-                        open("patina.pages.open.graphics", Page::Graphics),
-                        Some(open(
-                            "patina.pages.open.graphics_advanced",
-                            Page::GraphicsAdvanced,
-                        )),
-                    ),
-                    Row::Buttons(
-                        open("patina.pages.open.shader_packs", Page::ShaderPacks),
-                        Some(open("patina.pages.open.controller", Page::Controller)),
-                    ),
-                    Row::Buttons(
-                        open("patina.pages.open.extras", Page::Extras),
-                        Some(open("patina.pages.open.mods", Page::Mods)),
-                    ),
-                    // No AI hides the AI Agent page and everything AI.
-                    Row::Buttons(
-                        self.extra_button(s, crate::extras::Item::DiscordPresence),
-                        Some(if s.extras.no_ai {
-                            self.extra_button(s, crate::extras::Item::NoAi)
-                        } else {
-                            open("patina.pages.open.agent", Page::Agent)
-                        }),
-                    ),
-                ]
-                .into_iter()
-                .chain(
-                    (!s.extras.no_ai).then(|| {
-                        Row::Buttons(self.extra_button(s, crate::extras::Item::NoAi), None)
-                    }),
-                )
-                .collect()
-            }
-            Page::Agent => {
-                let mut rows = vec![Row::Buttons(
-                    self.extra_button(s, crate::extras::Item::AgentControl),
-                    Some(button(
-                        0.0,
-                        0.0,
-                        150.0,
-                        tr("patina.agent.copy_details"),
-                        Act::CopyAgentDetails,
-                    )),
-                )];
-                rows.extend(self.agent_status.iter().cloned().map(Row::Note));
-                rows
-            }
             Page::Video => {
                 let mut rows = vec![Row::Header("options.video.display.header")];
-                rows.extend(pairs(&[
+                let mut display = vec![
                     Opt::MaxFps,
                     Opt::Vsync,
                     Opt::InactivityFps,
                     Opt::GuiScale,
                     Opt::Fullscreen,
                     Opt::Gamma,
-                ]));
+                    Opt::Graphics(Gfx::ResolutionScale),
+                    Opt::Graphics(Gfx::Antialiasing),
+                    Opt::Graphics(Gfx::BatteryMode),
+                ];
+                // Only Windows and Linux have more than one graphics API.
+                if !cfg!(target_os = "macos") {
+                    display.push(Opt::Graphics(Gfx::GraphicsApi));
+                }
+                rows.extend(pairs(&display));
+                // HDR's rows show where the display offers it, whatever
+                // `patina-graphics.txt` says, and its sliders while it is on.
+                if crate::graphics::hdr_offered() {
+                    rows.extend(pairs(&[Opt::Graphics(Gfx::Hdr)]));
+                    if s.patina.hdr {
+                        rows.extend(pairs(&[
+                            Opt::Graphics(Gfx::HdrPeak),
+                            Opt::Graphics(Gfx::HdrPaperWhite),
+                            Opt::Graphics(Gfx::HdrBlackLevel),
+                            Opt::Graphics(Gfx::HdrUiBrightness),
+                        ]));
+                    }
+                }
+                // Where Iris puts them on Fabric: the Patina Client screen is the Fabric mod's.
+                rows.push(Row::Buttons(
+                    button(
+                        0.0,
+                        0.0,
+                        150.0,
+                        tr("patina.pages.shader_packs"),
+                        Act::Push(Page::ShaderPacks),
+                    ),
+                    None,
+                ));
                 rows.push(Row::Header("options.video.quality.header"));
                 rows.push(Row::Big(Opt::Preset));
                 rows.extend(pairs(&[
@@ -1657,15 +1427,20 @@ impl OptionsUi {
                     Opt::CutoutLeaves,
                     Opt::ImprovedTransparency,
                     Opt::WeatherRadius,
+                    Opt::Graphics(Gfx::LodDistance),
                 ]));
+                if s.patina.lod_distance > 0 {
+                    rows.push(Row::Pair(Opt::Graphics(Gfx::FarDetail), None));
+                }
                 rows.push(Row::Header("options.video.preferences.header"));
                 rows.extend(pairs(&[
                     Opt::Autosave,
                     Opt::Vignette,
                     Opt::AttackIndicator,
                     Opt::ChunkFade,
+                    Opt::Graphics(Gfx::Overlay),
                 ]));
-                self.filter_option_rows(rows)
+                rows
             }
             Page::Sound => {
                 // SoundOptionsScreen, without Audio Device: Patina opens the
@@ -1686,13 +1461,12 @@ impl OptionsUi {
             }
             Page::Online => {
                 // OnlineOptionsScreen without the Xbox and friends-list parts.
-                let mut rows = vec![Row::Header("options.online.friends.header")];
-                rows.extend(pairs(&[Opt::InGameNotification, Opt::SharePresence]));
-                rows.push(Row::Header("options.online.servers.header"));
-                rows.push(Row::Big(Opt::AllowServerListing));
-                rows.push(Row::Header("options.online.realms.header"));
-                rows.push(Row::Big(Opt::RealmsNotifications));
-                rows
+                vec![
+                    Row::Header("options.online.servers.header"),
+                    Row::Big(Opt::AllowServerListing),
+                    Row::Header("options.online.realms.header"),
+                    Row::Big(Opt::RealmsNotifications),
+                ]
             }
             Page::Controls => {
                 let mut rows = vec![Row::Buttons(
@@ -1711,9 +1485,19 @@ impl OptionsUi {
                         Act::Push(Page::KeyBinds),
                     )),
                 )];
+                rows.push(Row::Buttons(
+                    button(
+                        0.0,
+                        0.0,
+                        310.0,
+                        tr("patina.pages.open.controller"),
+                        Act::Push(Page::Controller),
+                    ),
+                    None,
+                ));
                 let controls = vanilla_control_options();
                 rows.extend(pairs(&controls));
-                self.filter_option_rows(rows)
+                rows
             }
             Page::Controller => {
                 let mut rows = vec![Row::Buttons(
@@ -1777,46 +1561,6 @@ impl OptionsUi {
                 rows
             }
             Page::Font => pairs(&[Opt::ForceUnicode, Opt::JapaneseGlyphs]),
-            Page::Mods => {
-                if s.mods.installed.is_empty() {
-                    return vec![Row::Header("patina.mods.empty")];
-                }
-                s.mods
-                    .installed
-                    .iter()
-                    .enumerate()
-                    .map(|(i, installed)| {
-                        let mut label = Text::literal(format!("{}: ", installed.title))
-                            .append(on_off(s.mods.is_on(i)));
-                        if installed.problem.is_some() {
-                            label = label.append(tr("patina.mods.stopped"));
-                        } else if installed.dev {
-                            label = label.append(tr("patina.mods.dev"));
-                        }
-                        let dead = installed.dev || installed.id.is_empty();
-                        // A native mod gets its settings page's button beside
-                        // the toggle.
-                        if installed.native.is_some() {
-                            let toggle = button(0.0, 0.0, 150.0, label, Act::ToggleMod(i));
-                            let settings = button(
-                                0.0,
-                                0.0,
-                                150.0,
-                                tr("patina.mods.settings"),
-                                Act::ModSettings(i),
-                            );
-                            Row::Buttons(
-                                if dead { inactive(toggle) } else { toggle },
-                                Some(settings),
-                            )
-                        } else {
-                            let widget = button(0.0, 0.0, 310.0, label, Act::ToggleMod(i));
-                            Row::Buttons(if dead { inactive(widget) } else { widget }, None)
-                        }
-                    })
-                    .collect()
-            }
-            Page::NativeMod(i) => self.native_rows(s, i),
             Page::ShaderPacks => {
                 if s.shader_packs.is_empty() {
                     return vec![Row::Header("patina.shader_packs.empty")];
@@ -1848,10 +1592,6 @@ impl OptionsUi {
         let mut out = Vec::new();
         let page = self.page();
         let cx = (w / 2.0).floor();
-        if matches!(page, Page::Video | Page::Controls | Page::KeyBinds) {
-            self.settings_search.x = cx - 100.0;
-            self.settings_search.y = 17.0;
-        }
         let done = |y: f32| button(cx - 100.0, y, 200.0, tr("gui.done"), Act::Done);
         // (list top, list bottom, content height)
         let (mut top, mut bottom, mut content) = (33.0, h - 33.0, 0.0);
@@ -1886,7 +1626,6 @@ impl OptionsUi {
                     ("options.chat", Some(Page::Chat)),
                     ("options.resourcepack", Some(Page::Packs)),
                     ("options.accessibility", Some(Page::Accessibility)),
-                    ("options.telemetry", None),
                     ("options.credits_and_attribution", Some(Page::Credits)),
                 ];
                 let rows = entries.len().div_ceil(2) as f32;
@@ -1942,10 +1681,9 @@ impl OptionsUi {
                 bottom = 0.0;
             }
             Page::KeyBinds => {
-                top = 38.0;
                 out.push(Widget {
                     x: 0.0,
-                    y: 4.0,
+                    y: 12.0,
                     w,
                     h: 9.0,
                     kind: WKind::Text {
@@ -1957,10 +1695,6 @@ impl OptionsUi {
                 });
                 let mut mappings: Vec<(&str, &str)> =
                     MAPPINGS.iter().map(|(n, _, c)| (*n, *c)).collect();
-                let query = self.settings_search.value.to_lowercase();
-                mappings.retain(|(name, _)| {
-                    query.is_empty() || lang::get(name).to_lowercase().contains(&query)
-                });
                 mappings.sort_by(|a, b| {
                     let ca = CATEGORIES.iter().position(|c| *c == a.1).unwrap_or(99);
                     let cb = CATEGORIES.iter().position(|c| *c == b.1).unwrap_or(99);
@@ -2229,16 +1963,9 @@ impl OptionsUi {
             // Drawn by `pack_screen`.
             Page::Packs => {}
             _ => {
-                if matches!(page, Page::Video | Page::Controls) {
-                    top = 38.0;
-                }
                 out.push(Widget {
                     x: 0.0,
-                    y: if matches!(page, Page::Video | Page::Controls) {
-                        4.0
-                    } else {
-                        12.0
-                    },
+                    y: 12.0,
                     w,
                     h: 9.0,
                     kind: WKind::Text {
@@ -2277,21 +2004,6 @@ impl OptionsUi {
                             });
                             y += padding + 18.0;
                         }
-                        Row::Note(text) => {
-                            out.push(Widget {
-                                x: 0.0,
-                                y: y + 4.0,
-                                w,
-                                h: 9.0,
-                                kind: WKind::Text {
-                                    text: Text::literal(text),
-                                    color: 0xFFA0A0A0,
-                                    centered: true,
-                                },
-                                list: false,
-                            });
-                            y += 16.0;
-                        }
                         Row::Big(opt) => {
                             out.push(option_widget(s, opt, cx - 155.0, y + 2.0, 310.0));
                             y += 25.0;
@@ -2318,13 +2030,10 @@ impl OptionsUi {
                 }
                 content = y + self.scroll - top + 2.0;
                 out[list_start..].iter_mut().for_each(|w| w.list = true);
-                let folder = match page {
-                    Page::Mods => Some(("patina.mods.open_folder", Act::OpenModFolder)),
-                    Page::ShaderPacks => Some(("pack.openFolder", Act::OpenShaderPackFolder)),
-                    _ => None,
-                };
-                if let Some((label, act)) = folder {
-                    out.push(button(cx - 154.0, h - 27.0, 150.0, tr(label), act));
+                if page == Page::ShaderPacks {
+                    let folder = tr("pack.openFolder");
+                    let open = Act::OpenShaderPackFolder;
+                    out.push(button(cx - 154.0, h - 27.0, 150.0, folder, open));
                     out.push(button(cx + 4.0, h - 27.0, 150.0, tr("gui.done"), Act::Done));
                 } else {
                     out.push(done(h - 27.0));
@@ -2390,9 +2099,8 @@ impl OptionsUi {
             );
             return;
         }
-        if let Some(level) = Self::graphics_level(self.page()) {
-            self.graphics
-                .draw(level, s, batch, atlas, cursor, self.in_world);
+        if self.page() == Page::Client {
+            self.client.draw(batch, atlas, cursor, self.in_world);
             return;
         }
         if self.page() == Page::Packs {
@@ -2424,21 +2132,6 @@ impl OptionsUi {
             let hover = ui::hovered(cursor, wd.x, wd.y, wd.w, wd.h)
                 && (!wd.list || cursor.1 >= top && cursor.1 < bottom);
             if hover {
-                if let WKind::Button {
-                    act: Act::Extra(item),
-                    ..
-                } = &wd.kind
-                {
-                    tooltip = Some(atlas.font.split(&Text::literal(item.description()), 170.0));
-                }
-                if let WKind::Button {
-                    act: Act::Push(page),
-                    ..
-                } = &wd.kind
-                    && let Some(text) = patina_page_tooltip(*page)
-                {
-                    tooltip = Some(atlas.font.split(&tr(text), 170.0));
-                }
                 let key = match &wd.kind {
                     WKind::Button {
                         act: Act::Cycle(opt),
@@ -2465,21 +2158,6 @@ impl OptionsUi {
                     && !opt.available()
                 {
                     tooltip = Some(atlas.font.split(&tr("patina.options.unavailable"), 170.0));
-                }
-                if let WKind::Button {
-                    act: Act::ToggleMod(i),
-                    ..
-                } = &wd.kind
-                    && let Some(installed) = s.mods.installed.get(*i)
-                {
-                    let description = installed
-                        .problem
-                        .as_deref()
-                        .unwrap_or(&installed.description);
-                    tooltip = Some(atlas.font.split(
-                        &Text::literal(format!("{}\n{description}", installed.title)),
-                        170.0,
-                    ));
                 }
             }
             match &wd.kind {
@@ -2600,21 +2278,6 @@ impl OptionsUi {
             }
             self.language_search = search;
         }
-        if matches!(self.page(), Page::Video | Page::Controls | Page::KeyBinds) {
-            let mut search = self.settings_search.clone();
-            search.draw(batch, atlas, None);
-            if search.value.is_empty() && !search.focused {
-                batch.text_styled(
-                    atlas,
-                    &tr("patina.options.search").with_color(text::GRAY).italic(),
-                    search.text_x(),
-                    search.text_y(),
-                    u32::MAX,
-                    true,
-                );
-            }
-            self.settings_search = search;
-        }
         if let Some(lines) = tooltip {
             ui::tooltip(batch, atlas, &lines, cursor);
         }
@@ -2641,33 +2304,21 @@ impl OptionsUi {
             }
             return Vec::new();
         }
-        if let Some(level) = Self::graphics_level(self.page()) {
-            use crate::graphics_ui::Action;
-            let mut events = Vec::new();
-            for action in self
-                .graphics
-                .click(level, s, (x, y), size, framebuffer, drag, right)
-            {
-                match action {
-                    Action::ButtonClick => events.push(Event::ButtonClick),
-                    Action::Changed => events.push(Event::Changed),
-                    Action::SliderDrag => events.push(Event::SliderDrag),
-                    Action::OpenAdvanced => self.push(Page::GraphicsAdvanced),
-                    Action::OpenHdr => self.push(Page::GraphicsHdr),
-                    Action::OpenSimple => {
-                        if self.stack.len() >= 2
-                            && self.stack[self.stack.len() - 2] == Page::Graphics
-                        {
-                            events.extend(self.back(s));
-                        } else {
-                            self.stack.pop();
-                            self.push(Page::Graphics);
-                        }
-                    }
-                    Action::Done => events.extend(self.back(s)),
-                }
+        if self.page() == Page::Client {
+            use crate::client_screen::Outcome;
+            if drag {
+                self.client.drag(atlas, (x, y), size);
+                return Vec::new();
             }
-            return events;
+            return match self.client.click(atlas, (x, y), size, right) {
+                Outcome::None | Outcome::Grabbed => Vec::new(),
+                Outcome::Pressed => vec![Event::ButtonClick],
+                Outcome::Done => {
+                    let mut events = vec![Event::ButtonClick];
+                    events.extend(self.back(s));
+                    events
+                }
+            };
         }
         if self.page() == Page::Packs {
             let mut events = Vec::new();
@@ -2700,16 +2351,6 @@ impl OptionsUi {
         }
         let (widgets, top, bottom, content) = self.layout(s, size.0, size.1);
         let mut events = Vec::new();
-        if !drag && matches!(self.page(), Page::Video | Page::Controls | Page::KeyBinds) {
-            let search = &mut self.settings_search;
-            search.focused = ui::hovered((x, y), search.x, search.y, search.width, search.height);
-            if search.focused {
-                search.click(atlas, x, false, false);
-                self.scroll = 0.0;
-                events.push(Event::ButtonClick);
-                return events;
-            }
-        }
         if drag {
             if let Some(previous_y) = self.scrollbar_drag_y {
                 if let Some((_, thumb)) = ui::scrollbar_thumb(top, bottom, content, self.scroll) {
@@ -2786,14 +2427,6 @@ impl OptionsUi {
                         Act::Cycle(opt) => {
                             events.extend(self.cycle_option(s, opt, right, framebuffer));
                         }
-                        Act::Extra(item) => {
-                            if let Some(name) = item.key_name() {
-                                self.selected_key = Some(name);
-                            } else {
-                                item.cycle(&mut s.extras, right);
-                                events.push(Event::Changed);
-                            }
-                        }
                         Act::Key(name) => self.selected_key = Some(name),
                         Act::ResetKey(name) => {
                             s.keys.set(name, KeyBinds::default_of(name));
@@ -2813,21 +2446,6 @@ impl OptionsUi {
                             s.controller.reset_bindings();
                             events.push(Event::Changed);
                         }
-                        Act::ToggleMod(i) => {
-                            s.mods.toggle(i);
-                            events.push(Event::Changed);
-                        }
-                        Act::ModSettings(i) => {
-                            events.push(Event::ButtonClick);
-                            self.push(Page::NativeMod(i));
-                            events.push(Event::NativeSettings(i));
-                        }
-                        Act::NativeKey(i, k) => {
-                            self.selected_key = Some(NATIVE_KEY);
-                            self.selected_native_key = Some((i, k));
-                        }
-                        Act::NativeButton(i, b) => events.push(Event::NativeButton(i, b)),
-                        Act::OpenModFolder => events.push(Event::OpenModFolder),
                         Act::PickShaderPack(i) => {
                             if let Some(pack) = s.shader_packs.get(i) {
                                 s.patina.shader_pack = if s.patina.shader_pack == pack.file {
@@ -2840,7 +2458,6 @@ impl OptionsUi {
                         }
                         Act::OpenShaderPackFolder => events.push(Event::OpenShaderPackFolder),
                         Act::Credits => events.push(Event::Credits),
-                        Act::CopyAgentDetails => events.push(Event::CopyAgentDetails),
                         Act::None => {}
                     }
                 }
@@ -2873,14 +2490,13 @@ impl OptionsUi {
     }
     pub fn release(&mut self) -> Vec<Event> {
         self.scrollbar_drag_y = None;
+        self.client.release();
         if let Some(p) = &mut self.pack_screen {
             p.release();
         }
         // AbstractSliderButton suppresses the press sound and plays once on
         // release, even if the pointer has left the widget or its value stayed.
-        let slider = self.dragging.take().is_some();
-        let graphics_slider = self.graphics.release();
-        if slider || graphics_slider {
+        if self.dragging.take().is_some() {
             vec![Event::ButtonClick, Event::Changed]
         } else {
             Vec::new()
@@ -2928,13 +2544,17 @@ impl OptionsUi {
     pub fn wheel(
         &mut self,
         s: &mut Settings,
+        atlas: &HudAtlas,
         size: (f32, f32),
         cursor: (f32, f32),
         framebuffer: [i32; 2],
         amount: f32,
     ) -> Vec<Event> {
+        if self.resource_error.is_none() && self.page() == Page::Client {
+            self.client.wheel(atlas, cursor, size, amount);
+            return Vec::new();
+        }
         let plain = self.resource_error.is_none()
-            && Self::graphics_level(self.page()).is_none()
             && !(self.pack_screen.is_some() && self.stack.last() == Some(&Page::Packs));
         if !plain {
             self.scroll_at(s, size, cursor, amount);
@@ -2965,10 +2585,6 @@ impl OptionsUi {
     /// The mouse wheel at the cursor.
     pub fn scroll_at(&mut self, s: &Settings, size: (f32, f32), cursor: (f32, f32), amount: f32) {
         if self.resource_error.is_some() {
-            return;
-        }
-        if let Some(level) = Self::graphics_level(self.page()) {
-            self.graphics.scroll(level, s, size.1, amount);
             return;
         }
         match &mut self.pack_screen {
@@ -3037,6 +2653,11 @@ impl OptionsUi {
     }
     /// Escape or Done: leave the current page, applying page results.
     pub fn back(&mut self, s: &mut Settings) -> Vec<Event> {
+        // Escape in the HUD editor goes back to the Patina Client panel.
+        if self.page() == Page::Client && self.client.editing() {
+            self.client.leave_editor();
+            return Vec::new();
+        }
         let mut events = Vec::new();
         let page = self.stack.pop().unwrap_or(Page::Main);
         self.scroll = 0.0;
@@ -3092,9 +2713,6 @@ impl OptionsUi {
         if self.page() == Page::Language {
             self.language_search.insert_text(text);
             self.scroll = 0.0;
-        } else if self.settings_search_active() {
-            self.settings_search.insert_text(text);
-            self.scroll = 0.0;
         }
     }
     /// Ctrl+A/C/V/X in the language or pack search box; false when neither
@@ -3120,33 +2738,13 @@ impl OptionsUi {
             }
             return true;
         }
-        if self.settings_search_active() {
-            if self.settings_search.shortcut(shortcut, clipboard) {
-                self.scroll = 0.0;
-            }
-            return true;
-        }
         false
     }
     fn bind_key(&mut self, s: &mut Settings, value: String) -> Vec<Event> {
         let Some(name) = self.selected_key.take() else {
             return Vec::new();
         };
-        if name == NATIVE_KEY {
-            let (i, k) = self.selected_native_key.take().unwrap_or_default();
-            let Some(m) = s.mods.installed.get(i) else {
-                return Vec::new();
-            };
-            let Some([key, ..]) = m.native.as_ref().and_then(|p| p.keys.get(k)) else {
-                return Vec::new();
-            };
-            let keys = s.mods.keys.entry(m.id.clone()).or_default();
-            keys.insert(key.clone(), value);
-            return vec![Event::Changed];
-        }
-        if !s.extras.set_key(name, value.clone()) {
-            s.keys.set(name, &value);
-        }
+        s.keys.set(name, &value);
         vec![Event::Changed]
     }
     /// Mouse bindings use the same settings and persistence as keyboard bindings.
@@ -3218,16 +2816,6 @@ impl OptionsUi {
                 let typed: String = t.chars().filter(|c| !c.is_control()).collect();
                 if !typed.is_empty() {
                     self.language_search.insert_text(&typed);
-                }
-            }
-            self.scroll = 0.0;
-        } else if self.settings_search_active() {
-            if !self.settings_search.key(key, false, false)
-                && let Some(t) = text
-            {
-                let typed: String = t.chars().filter(|c| !c.is_control()).collect();
-                if !typed.is_empty() {
-                    self.settings_search.insert_text(&typed);
                 }
             }
             self.scroll = 0.0;
@@ -3484,215 +3072,6 @@ mod tests {
     }
 
     #[test]
-    fn classic_mods_page_toggles_mods_and_keeps_dev_and_invalid_entries_inactive() {
-        let atlas = atlas();
-        let mut s = Settings::default();
-        let mut ui = OptionsUi::default();
-        let size = (480.0, 240.0);
-        assert!(ui.layout(&s, size.0, size.1).0.iter().any(|w| {
-            matches!(
-                w.kind,
-                WKind::Button {
-                    active: true,
-                    act: Act::Push(Page::Mods),
-                    ..
-                }
-            )
-        }));
-        ui.show(Page::Mods);
-        let empty = ui.layout(&s, size.0, size.1).0;
-        assert!(empty.iter().any(|w| {
-            matches!(&w.kind, WKind::Text { text, .. } if text.plain() == "patina.mods.empty")
-        }));
-        // The empty page points at the bundled key; the English line behind it
-        // is what a player reads, so both halves are checked here.
-        let en = crate::lang::Language::load(&[], "en_us");
-        assert!(
-            en.get("patina.mods.empty")
-                .is_some_and(|line| line.contains(".hmod"))
-        );
-        let open_folder = empty
-            .iter()
-            .find(|w| {
-                matches!(
-                    &w.kind,
-                    WKind::Button {
-                        act: Act::OpenModFolder,
-                        ..
-                    }
-                )
-            })
-            .expect("Mods page has an Open Mod Folder button");
-        assert_eq!(
-            ui.click(
-                &mut s,
-                &atlas,
-                open_folder.x + 1.0,
-                open_folder.y + 1.0,
-                size,
-                [480, 240],
-                false,
-                false,
-            ),
-            vec![Event::ButtonClick, Event::OpenModFolder]
-        );
-        for (id, dev) in [("normal", false), ("dev", true), ("", false)] {
-            s.mods.installed.push(crate::mod_list::Installed {
-                id: id.into(),
-                title: id.into(),
-                description: "May show HUD panels.".into(),
-                problem: id.is_empty().then(|| "Invalid package".into()),
-                dev,
-                native: None,
-            });
-        }
-        let (widgets, ..) = ui.layout(&s, size.0, size.1);
-        let rows: Vec<_> = widgets
-            .iter()
-            .filter(|w| {
-                matches!(
-                    w.kind,
-                    WKind::Button {
-                        act: Act::ToggleMod(_),
-                        ..
-                    }
-                )
-            })
-            .collect();
-        assert_eq!(rows.len(), 3);
-        for (i, row) in rows.iter().enumerate() {
-            let events = ui.click(
-                &mut s,
-                &atlas,
-                row.x + 1.0,
-                row.y + 1.0,
-                size,
-                [480, 240],
-                false,
-                false,
-            );
-            if i == 0 {
-                assert!(events.contains(&Event::Changed));
-                assert!(events.contains(&Event::ButtonClick));
-            } else {
-                assert!(events.is_empty());
-            }
-        }
-        assert!(s.mods.is_on(0));
-        assert!(s.mods.is_on(1));
-        assert!(!s.mods.is_on(2));
-        assert_eq!(s.mods.serialize(), "mod.normal:true\n");
-        let row = rows[0];
-        ui.click(
-            &mut s,
-            &atlas,
-            row.x + 1.0,
-            row.y + 1.0,
-            size,
-            [480, 240],
-            false,
-            false,
-        );
-        assert!(!s.mods.is_on(0));
-        assert!(!ui.back(&mut s).contains(&Event::Close));
-        assert_eq!(ui.page(), Page::Main);
-    }
-
-    #[test]
-    fn opening_a_native_mods_page_asks_the_game_for_its_labels_again() {
-        let atlas = atlas();
-        let mut s = Settings::default();
-        let mut ui = OptionsUi::default();
-        let size = (480.0, 240.0);
-        s.mods.installed.push(crate::mod_list::Installed {
-            id: "native".into(),
-            title: "Native 1.0".into(),
-            description: String::new(),
-            problem: None,
-            dev: false,
-            native: Some(crate::mod_list::NativePage::default()),
-        });
-        ui.show(Page::Mods);
-        let (widgets, ..) = ui.layout(&s, size.0, size.1);
-        let settings = widgets
-            .iter()
-            .find(|w| {
-                matches!(
-                    w.kind,
-                    WKind::Button {
-                        act: Act::ModSettings(0),
-                        ..
-                    }
-                )
-            })
-            .expect("a native mod's row has a Settings button");
-        let events = ui.click(
-            &mut s,
-            &atlas,
-            settings.x + 1.0,
-            settings.y + 1.0,
-            size,
-            [480, 240],
-            false,
-            false,
-        );
-        // Its labels were made with the list, maybe in another language.
-        assert_eq!(events.last(), Some(&Event::NativeSettings(0)));
-        assert_eq!(ui.page(), Page::NativeMod(0));
-    }
-
-    #[test]
-    fn a_native_mods_key_shows_and_keeps_the_key_pressed() {
-        // #3539: Zoom's key set to R showed another key.
-        let atlas = atlas();
-        let mut s = Settings::default();
-        let mut ui = OptionsUi::default();
-        let size = (480.0, 240.0);
-        s.mods.installed.push(crate::mod_list::Installed {
-            id: "zoom".into(),
-            title: "Zoom 2.0.0".into(),
-            description: String::new(),
-            problem: None,
-            dev: false,
-            native: Some(crate::mod_list::NativePage {
-                keys: vec![["zoom".into(), "Zoom key".into(), "key.keyboard.z".into()]],
-                buttons: Vec::new(),
-            }),
-        });
-        ui.show(Page::NativeMod(0));
-        let key_label = |ui: &mut OptionsUi, s: &Settings| {
-            let (widgets, ..) = ui.layout(s, size.0, size.1);
-            widgets.into_iter().find_map(|w| match w.kind {
-                WKind::Button {
-                    label,
-                    act: Act::NativeKey(0, 0),
-                    ..
-                } => Some((label.plain(), w.x, w.y)),
-                _ => None,
-            })
-        };
-        let (label, x, y) = key_label(&mut ui, &s).expect("the key's row");
-        assert_eq!(label, "Z");
-        ui.click(
-            &mut s,
-            &atlas,
-            x + 1.0,
-            y + 1.0,
-            size,
-            [480, 240],
-            false,
-            false,
-        );
-        assert_eq!(
-            ui.key(&mut s, &atlas, winit::keyboard::KeyCode::KeyR, Some("r")),
-            vec![Event::Changed]
-        );
-        assert_eq!(key_label(&mut ui, &s).unwrap().0, "R");
-        let saved = crate::mod_list::ModList::parse(&s.mods.serialize());
-        assert_eq!(saved.keys_of("zoom"), vec![("zoom", "key.keyboard.r")]);
-    }
-
-    #[test]
     fn option_tooltip_keys_follow_value_dependent_descriptions() {
         let mut s = Settings::default();
         assert_eq!(
@@ -3765,76 +3144,6 @@ mod tests {
     }
 
     #[test]
-    fn classic_video_search_keeps_only_headings_with_matching_options() {
-        let mut ui = OptionsUi::default();
-        ui.show(Page::Video);
-        let settings = Settings::default();
-        let headers = |rows: Vec<Row>| {
-            rows.into_iter()
-                .filter_map(|row| match row {
-                    Row::Header(key) => Some(key),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-        };
-        let all_headers = vec![
-            "options.video.display.header",
-            "options.video.quality.header",
-            "options.video.preferences.header",
-        ];
-        assert_eq!(headers(ui.list_rows(&settings)), all_headers);
-        for (opt, header) in [
-            (Opt::Fullscreen, all_headers[0]),
-            (Opt::RenderDistance, all_headers[1]),
-            (Opt::Preset, all_headers[1]),
-            (Opt::Autosave, all_headers[2]),
-        ] {
-            ui.settings_search
-                .set_value(&lang::get(opt.caption()).to_uppercase());
-            let rows = ui.list_rows(&settings);
-            assert_eq!(headers(ui.list_rows(&settings)), vec![header]);
-            assert!(rows.iter().any(|row| match row {
-                Row::Big(found) => *found == opt,
-                Row::Pair(a, b) => *a == opt || *b == Some(opt),
-                _ => false,
-            }));
-            assert!(rows.iter().any(|row| matches!(row, Row::Buttons(..))));
-        }
-        ui.settings_search.set_value("no matching video setting");
-        let rows = ui.list_rows(&settings);
-        assert!(headers(ui.list_rows(&settings)).is_empty());
-        assert!(rows.iter().all(|row| matches!(row, Row::Buttons(..))));
-        ui.settings_search.set_value("");
-        assert_eq!(headers(ui.list_rows(&settings)), all_headers);
-    }
-
-    #[test]
-    fn classic_search_emits_each_matching_heading_once_in_section_order() {
-        let mut ui = OptionsUi::default();
-        ui.settings_search
-            .set_value(&lang::get(Opt::Fullscreen.caption()));
-        let rows = ui.filter_option_rows(vec![
-            Row::Header("empty"),
-            Row::Header("display"),
-            Row::Pair(Opt::Fullscreen, Some(Opt::Fullscreen)),
-            Row::Big(Opt::Fullscreen),
-            Row::Header("quality"),
-            Row::Big(Opt::Fullscreen),
-            Row::Header("trailing empty"),
-        ]);
-        assert!(matches!(
-            rows.as_slice(),
-            [
-                Row::Header("display"),
-                Row::Pair(Opt::Fullscreen, Some(Opt::Fullscreen)),
-                Row::Big(Opt::Fullscreen),
-                Row::Header("quality"),
-                Row::Big(Opt::Fullscreen),
-            ]
-        ));
-    }
-
-    #[test]
     fn classic_video_gui_scale_cycles_on_press_without_dragging() {
         let atlas = atlas();
         let mut s = Settings::default();
@@ -3875,84 +3184,6 @@ mod tests {
             assert_eq!(s.gui_scale, expected);
             assert!(ui.release().is_empty());
         }
-    }
-
-    #[test]
-    fn extras_from_patina_settings_edit_shared_settings_and_return() {
-        let atlas = atlas();
-        let mut s = Settings::default();
-        let mut ui = OptionsUi::default();
-        let size = (480.0, 480.0);
-        let click = |ui: &mut OptionsUi, s: &mut Settings, act: Act| {
-            let (widgets, _, _, _) = ui.layout(s, size.0, size.1);
-            let widget = widgets
-                .iter()
-                .find(
-                    |w| matches!(&w.kind, WKind::Button { act: a, active: true, .. } if *a == act),
-                )
-                .unwrap();
-            ui.click(
-                s,
-                &atlas,
-                widget.x + 1.0,
-                widget.y + 1.0,
-                size,
-                [960, 960],
-                false,
-                false,
-            )
-        };
-        for page in [Page::Patina, Page::Extras] {
-            assert_eq!(
-                click(&mut ui, &mut s, Act::Push(page)),
-                vec![Event::ButtonClick]
-            );
-            assert_eq!(ui.page(), page);
-        }
-        let (widgets, _, _, _) = ui.layout(&s, size.0, size.1);
-        assert_eq!(
-            widgets
-                .iter()
-                .filter(|w| matches!(
-                    w.kind,
-                    WKind::Button {
-                        act: Act::Extra(_),
-                        ..
-                    }
-                ))
-                .count(),
-            crate::extras::rows().iter().filter(|r| r.is_ok()).count()
-        );
-        assert_eq!(
-            click(&mut ui, &mut s, Act::Extra(crate::extras::Item::Sort)),
-            vec![Event::ButtonClick, Event::Changed]
-        );
-        assert!(s.extras.sort);
-        assert_eq!(
-            click(&mut ui, &mut s, Act::Extra(crate::extras::Item::SortKey)),
-            vec![Event::ButtonClick]
-        );
-        assert_eq!(ui.selected_key, Some(crate::extras::SORT_KEY));
-        assert_eq!(
-            ui.key(&mut s, &atlas, winit::keyboard::KeyCode::KeyC, None),
-            vec![Event::Changed]
-        );
-        assert_eq!(s.extras.sort_key, "key.keyboard.c");
-        assert_eq!(
-            crate::extras::Extras::parse(&s.extras.serialize()),
-            s.extras
-        );
-        // In a window too short for the page, the wheel scrolls to its end.
-        let short = (480.0, 180.0);
-        ui.scroll(&s, short, -1000.0);
-        let (_, top, bottom, content) = ui.layout(&s, short.0, short.1);
-        assert!(content > bottom - top);
-        assert_eq!(ui.scroll, content - (bottom - top));
-        assert_eq!(
-            ui.key(&mut s, &atlas, winit::keyboard::KeyCode::Escape, None),
-            vec![Event::Changed]
-        );
-        assert_eq!(ui.page(), Page::Patina);
     }
 
     #[test]
@@ -4397,8 +3628,7 @@ mod tests {
                 .vertices
                 .iter()
                 .filter(|v| {
-                    (0.25..=0.5).contains(&v.uv[0])
-                        && (0.25..=0.5).contains(&v.uv[1])
+                    v.color == ui::button_colors(true, false).0
                         && v.pos[0] >= x
                         && v.pos[0] <= x + width
                         && v.pos[1] >= row_y
@@ -4526,64 +3756,6 @@ mod tests {
     }
 
     #[test]
-    fn extras_and_vanilla_bindings_accept_mouse_buttons() {
-        use crate::extras::{Extras, SORT_KEY};
-        use winit::event::MouseButton;
-        for button in [
-            MouseButton::Left,
-            MouseButton::Right,
-            MouseButton::Middle,
-            MouseButton::Back,
-            MouseButton::Forward,
-        ] {
-            for name in [SORT_KEY, "key.jump"] {
-                let mut ui = OptionsUi::default();
-                let mut s = Settings::default();
-                ui.selected_key = Some(name);
-                assert_eq!(ui.bind_mouse(&mut s, button), vec![Event::Changed]);
-                assert_eq!(ui.selected_key, None);
-                let value = keybinds::mouse_name(button);
-                match name {
-                    SORT_KEY => assert_eq!(s.extras.sort_key, value),
-                    _ => assert_eq!(s.keys.get(name), value),
-                }
-                assert_eq!(Extras::parse(&s.extras.serialize()), s.extras);
-                if name != "key.jump" {
-                    assert_eq!(s.keys, Settings::default().keys);
-                }
-                assert!(ui.bind_mouse(&mut s, button).is_empty());
-            }
-        }
-    }
-
-    #[test]
-    fn patina_extra_mouse_binding_consumes_the_click() {
-        let atlas = atlas();
-        let mut s = Settings::default();
-        let mut ui = OptionsUi::default();
-        ui.show(Page::Extras);
-        for (right, expected) in [(false, "key.mouse.left"), (true, "key.mouse.right")] {
-            ui.selected_key = Some(crate::extras::SORT_KEY);
-            assert_eq!(
-                ui.click(
-                    &mut s,
-                    &atlas,
-                    2.0,
-                    2.0,
-                    (480.0, 240.0),
-                    [960, 480],
-                    false,
-                    right
-                ),
-                vec![Event::Changed]
-            );
-            assert_eq!(s.extras.sort_key, expected);
-            assert_eq!(ui.selected_key, None);
-            assert_eq!(ui.page(), Page::Extras);
-        }
-    }
-
-    #[test]
     fn key_rebinding_takes_precedence_over_scrollbar_dragging() {
         let atlas = atlas();
         let mut s = Settings::default();
@@ -4693,7 +3865,7 @@ mod tests {
     }
 
     #[test]
-    fn patina_settings_hang_off_options_and_reach_every_patina_page() {
+    fn options_are_vanillas_with_rows_for_the_rest() {
         let s = Settings::default();
         let mut ui = OptionsUi::default();
         let pushes = |ui: &mut OptionsUi| -> Vec<Page> {
@@ -4710,55 +3882,28 @@ mod tests {
                 })
                 .collect()
         };
-        // Vanilla's Options buttons, Patina's two in the Telemetry and Credits slots, then
-        // Credits & Attribution (WinScreen's credits).
-        let main = pushes(&mut ui);
-        assert_eq!(
-            &main[main.len() - 3..],
-            [Page::Patina, Page::Mods, Page::Credits]
-        );
-        ui.push(Page::Patina);
-        assert_eq!(
-            pushes(&mut ui),
-            [
-                Page::Graphics,
-                Page::GraphicsAdvanced,
-                Page::ShaderPacks,
-                Page::Controller,
-                Page::Extras,
-                Page::Mods,
-                Page::Agent,
-            ]
-        );
-        // No AI hides the AI Agent page.
-        let mut no_ai = Settings::default();
-        no_ai.extras.no_ai = true;
-        let (widgets, _, _, _) = ui.layout(&no_ai, 427.0, 240.0);
-        assert!(!widgets.iter().any(|w| matches!(
-            &w.kind,
-            WKind::Button {
-                act: Act::Push(Page::Agent),
-                ..
-            }
-        )));
-        // The AI Agent page: the switch, Copy and the status the game sets.
-        ui.push(Page::Agent);
-        ui.agent_status = vec!["Waiting for an agent.".into()];
-        let (widgets, _, _, _) = ui.layout(&s, 427.0, 240.0);
-        let acts: Vec<&Act> = widgets
-            .iter()
-            .filter_map(|w| match &w.kind {
-                WKind::Button { act, .. } => Some(act),
-                _ => None,
-            })
-            .collect();
-        assert!(acts.contains(&&Act::Extra(crate::extras::Item::AgentControl)));
-        assert!(acts.contains(&&Act::CopyAgentDetails));
-        // Vanilla's own pages keep the Patina pages they had.
+        // Vanilla's Options buttons end with Credits & Attribution, and no page of Patina's.
+        assert_eq!(pushes(&mut ui).last(), Some(&Page::Credits));
+        // Video Settings holds rows, not pages: the graphics rows beyond vanilla's are in it,
+        // and the shader packs, where Iris has them on Fabric.
         ui.stack = vec![Page::Main, Page::Video];
-        let video = pushes(&mut ui);
-        for page in [Page::Graphics, Page::GraphicsAdvanced] {
-            assert!(video.contains(&page), "{page:?}");
+        assert_eq!(pushes(&mut ui), [Page::ShaderPacks]);
+        let rows = ui.list_rows(&s);
+        let shown = |gfx: Gfx| {
+            rows.iter().any(|row| {
+                matches!(row, Row::Pair(a, b) if *a == Opt::Graphics(gfx)
+                    || *b == Some(Opt::Graphics(gfx)))
+            })
+        };
+        for gfx in [
+            Gfx::LodDistance,
+            Gfx::ResolutionScale,
+            Gfx::Antialiasing,
+            Gfx::BatteryMode,
+            Gfx::GraphicsApi,
+            Gfx::Overlay,
+        ] {
+            assert!(shown(gfx), "{gfx:?}");
         }
         ui.stack = vec![Page::Main, Page::Controls];
         assert!(pushes(&mut ui).contains(&Page::Controller));

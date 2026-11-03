@@ -15,7 +15,7 @@ impl Paths {
     }
 
     pub fn default_root() -> PathBuf {
-        dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("amethyst")
+        dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join(if crate::DEV { "patina-dev" } else { "amethyst" })
     }
 
     pub fn ensure(&self) -> std::io::Result<()> {
@@ -54,9 +54,6 @@ impl Paths {
     }
     pub fn client_jar(&self, id: &str) -> PathBuf {
         self.version_dir(id).join(format!("{id}.jar"))
-    }
-    pub fn backdrop(&self) -> PathBuf {
-        self.root.join("backdrop")
     }
     pub fn settings_file(&self) -> PathBuf {
         self.root.join("settings.json")

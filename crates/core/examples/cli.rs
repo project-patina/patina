@@ -49,6 +49,7 @@ async fn main() -> amethyst_core::Result<()> {
                 let mods = amethyst_core::modrinth::install_performance_mods(&ctx, &inst, &rep, &cancel).await?;
                 println!("mods: {mods:?}");
             }
+            amethyst_core::patina_mod::sync(&ctx, &inst)?;
             println!("prepared in {:?}, java {}", t.elapsed(), prep.java.display());
             let player = launch::Player::offline("AmethystTest");
             let spec = if ld == Loader::Rust { engine::build(&ctx, &inst, &player, &settings)? } else { launch::build(&ctx, &inst, &prep, &player, &settings) };

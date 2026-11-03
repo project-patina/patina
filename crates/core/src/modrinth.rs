@@ -228,7 +228,7 @@ async fn get<T: serde::de::DeserializeOwned>(ctx: &Ctx, url: &str, query: &[(&st
         return Ok(None);
     }
     if r.status().as_u16() == 429 {
-        bail!("Modrinth ogranicza liczbę zapytań — spróbuj za chwilę");
+        bail!("Modrinth ogranicza liczbę zapytań — spróbuj za chwilę", "Modrinth is rate limiting requests, try again in a moment");
     }
     Ok(Some(r.error_for_status()?.json().await?))
 }
@@ -262,11 +262,11 @@ pub async fn search(ctx: &Ctx, q: &SearchQuery) -> Result<SearchResult> {
         ("offset", q.offset.to_string()),
         ("limit", "20".to_string()),
     ];
-    get(ctx, &format!("{API}/search"), &query).await?.ok_or_else(|| Error::msg("Brak wyników"))
+    get(ctx, &format!("{API}/search"), &query).await?.ok_or_else(|| Error::msg(crate::lang::tr("Brak wyników", "No results")))
 }
 
 pub async fn project(ctx: &Ctx, id: &str) -> Result<Project> {
-    get(ctx, &format!("{API}/project/{id}"), &[]).await?.ok_or_else(|| Error::msg("Nie znaleziono projektu"))
+    get(ctx, &format!("{API}/project/{id}"), &[]).await?.ok_or_else(|| Error::msg(crate::lang::tr("Nie znaleziono projektu", "Project not found")))
 }
 
 /// All versions of a project, newest first. Filters are optional so the UI
@@ -283,7 +283,7 @@ pub async fn versions(ctx: &Ctx, id: &str, loaders: &[&str], game_version: Optio
 }
 
 pub async fn version(ctx: &Ctx, id: &str) -> Result<Version> {
-    get(ctx, &format!("{API}/version/{id}"), &[]).await?.ok_or_else(|| Error::msg("Nie znaleziono wersji"))
+    get(ctx, &format!("{API}/version/{id}"), &[]).await?.ok_or_else(|| Error::msg(crate::lang::tr("Nie znaleziono wersji", "Version not found")))
 }
 
 /// Newest version of a project compatible with the instance.
@@ -319,7 +319,7 @@ pub async fn install(
     cancel: &CancellationToken,
 ) -> Result<Vec<Installed>> {
     if kind == ContentKind::Mod && inst.loader.is_plain() {
-        bail!("Ta instancja nie obsługuje modów — zmień loader na Fabric");
+        bail!("Ta instancja nie obsługuje modów — zmień loader na Fabric", "This instance does not support mods, change its loader to Fabric");
     }
     // One metadata writer per instance at a time (installs, identify).
     let _guard = content::lock(&inst.id).await;
@@ -347,11 +347,11 @@ pub async fn install(
                     log::warn!("dependency {pid} has no build for {}", inst.mc_version);
                     continue;
                 }
-                None => bail!("Ten projekt nie ma wersji dla {} {}", inst.loader.label(), inst.mc_version),
+                None => bail!("Ten projekt nie ma wersji dla {} {}", "This project has no version for {} {}", inst.loader.label(), inst.mc_version),
             },
         };
         let p = project(ctx, &pid).await?;
-        reporter.report("content", plan.len() as u64, (plan.len() + queue.len() + 1) as u64, format!("Przygotowywanie: {}", p.title));
+        reporter.report("content", plan.len() as u64, (plan.len() + queue.len() + 1) as u64, crate::tr!("Przygotowywanie: {}", "Preparing: {}", p.title));
         for d in v.dependencies.iter().filter(|d| d.dependency_type == "required") {
             // Fabric API on Quilt → Quilt's own port (see performance mods).
             let dep = match (inst.loader, d.project_id.as_deref()) {
@@ -374,7 +374,7 @@ pub async fn install(
     for (v, p, dep) in &plan {
         let Some(f) = v.primary_file() else { continue };
         if !content::safe_name(&f.filename) {
-            bail!("Podejrzana nazwa pliku: {}", f.filename);
+            bail!("Podejrzana nazwa pliku: {}", "Suspicious file name: {}", f.filename);
         }
         items.push(DlItem::new(&f.url, dir.join(&f.filename)).sha1(Some(f.hashes.sha1.clone())).size(Some(f.size)));
         out.push(Installed { title: p.title.clone(), file: f.filename.clone(), dependency: *dep });
@@ -384,7 +384,7 @@ pub async fn install(
     // The instance may have been deleted while we were downloading.
     if !ctx.paths.instance_dir(&inst.id).join("instance.json").exists() {
         let _ = std::fs::remove_dir_all(ctx.paths.instance_dir(&inst.id));
-        bail!("Instancja została usunięta w trakcie instalacji");
+        bail!("Instancja została usunięta w trakcie instalacji", "The instance was deleted during installation");
     }
 
     // Swap out older files of the same projects, then record metadata. A
@@ -509,7 +509,7 @@ pub async fn install_performance_mods(ctx: &Ctx, inst: &Instance, reporter: &Rep
     if inst.loader.is_plain() {
         return Ok(vec![]);
     }
-    reporter.report("mods", 0, PERFORMANCE_MODS.len() as u64, "Instalowanie modów optymalizacyjnych…");
+    reporter.report("mods", 0, PERFORMANCE_MODS.len() as u64, crate::lang::tr("Instalowanie modów optymalizacyjnych…", "Installing performance mods…"));
     let meta = content::load_meta(ctx, &inst.id);
     let existing: Vec<String> = content::files(ctx, &inst.id, ContentKind::Mod).into_iter().map(|(n, _)| n.to_lowercase()).collect();
     let mut names = Vec::new();

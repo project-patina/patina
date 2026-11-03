@@ -1,18 +1,20 @@
 use serde::{Serialize, Serializer};
 
+use crate::lang::tr;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Błąd sieci: {0}")]
+    #[error("{label}: {0}", label = tr("Błąd sieci", "Network error"))]
     Http(#[from] reqwest::Error),
-    #[error("Błąd dysku: {0}")]
+    #[error("{label}: {0}", label = tr("Błąd dysku", "Disk error"))]
     Io(#[from] std::io::Error),
-    #[error("Niepoprawne dane JSON: {0}")]
+    #[error("{label}: {0}", label = tr("Niepoprawne dane JSON", "Invalid JSON"))]
     Json(#[from] serde_json::Error),
-    #[error("Uszkodzone archiwum: {0}")]
+    #[error("{label}: {0}", label = tr("Uszkodzone archiwum", "Damaged archive"))]
     Zip(#[from] zip::result::ZipError),
     #[error("{0}")]
     Msg(String),
-    #[error("Anulowano")]
+    #[error("{}", tr("Anulowano", "Cancelled"))]
     Cancelled,
 }
 
@@ -33,5 +35,5 @@ impl Serialize for Error {
 
 #[macro_export]
 macro_rules! bail {
-    ($($t:tt)*) => { return Err($crate::Error::Msg(format!($($t)*))) };
+    ($($t:tt)*) => { return Err($crate::Error::Msg($crate::tr!($($t)*))) };
 }

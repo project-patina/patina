@@ -392,7 +392,9 @@ fn check_updates(shared: Arc<Shared>) {
     let Some(install) = shared.install.clone() else {
         return;
     };
-    if std::env::var_os("PATINA_NO_UPDATE_CHECK").is_some_and(|v| !v.is_empty() && v != "0") {
+    if std::env::var_os("PATINA_NO_UPDATE_CHECK").is_some_and(|v| !v.is_empty() && v != "0")
+        || !update::has_source()
+    {
         return;
     }
     let _ = thread::Builder::new()

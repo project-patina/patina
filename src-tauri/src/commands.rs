@@ -3,7 +3,7 @@ use amethyst_core::instance::{Instance, NewInstance};
 use amethyst_core::java::JavaInstall;
 use amethyst_core::loaders::{self, Loader, LoaderVersion};
 use amethyst_core::settings::{self, Settings};
-use amethyst_core::{accounts, bail, engine, mojang, Error, Result};
+use amethyst_core::{accounts, bail, engine, lang, mojang, Error, Result};
 use serde::Serialize;
 use tauri::State;
 use tokio_util::sync::CancellationToken;
@@ -40,8 +40,18 @@ pub fn get_settings(state: State<'_, AppState>) -> Settings {
 }
 
 #[tauri::command]
-pub fn list_news() -> Result<Vec<amethyst_core::news::ReleaseNote>> {
-    amethyst_core::news::list()
+pub async fn list_announcements(state: State<'_, AppState>, language: String) -> Result<amethyst_core::announcements::Feed> {
+    amethyst_core::announcements::list(&state.ctx, &language).await
+}
+
+/// The language of the messages the backend sends from now on.
+#[tauri::command]
+pub fn set_language(language: String) -> Result<()> {
+    if !["pl", "en"].contains(&language.as_str()) {
+        bail!("Nieznany język", "Unknown language");
+    }
+    lang::set(&language);
+    Ok(())
 }
 
 #[tauri::command]
@@ -50,6 +60,9 @@ pub fn save_settings(state: State<'_, AppState>, settings: Settings) -> Result<S
     let mut current = state.settings.write().unwrap();
     s.save(&state.ctx)?;
     *current = s.clone();
+    if !s.language.is_empty() {
+        lang::set(&s.language);
+    }
     Ok(s)
 }
 
@@ -111,14 +124,14 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> Result
     let mut cur = Instance::load(&state.ctx, &instance.id)?;
     let name = instance.name.trim();
     if name.is_empty() {
-        bail!("Nazwa nie może być pusta");
+        bail!("Nazwa nie może być pusta", "The name cannot be empty");
     }
     let mc_version = if instance.loader == Loader::Rust { engine::MC_VERSION.into() } else { instance.mc_version };
     amethyst_core::instance::validate_version_id(&mc_version)?;
     let loader_version = if instance.loader.is_plain() { None } else { instance.loader_version.filter(|v| !v.is_empty()) };
     let changed_game = cur.mc_version != mc_version || cur.loader != instance.loader || cur.loader_version != loader_version;
     if changed_game && (running.contains_key(&cur.id) || installs.contains_key(&cur.id)) {
-        bail!("Zatrzymaj grę lub przygotowanie przed zmianą wersji i loadera");
+        bail!("Zatrzymaj grę lub przygotowanie przed zmianą wersji i loadera", "Stop the game or its preparation before changing the version or loader");
     }
     cur.name = name.chars().take(48).collect();
     cur.icon = instance.icon;
@@ -139,7 +152,7 @@ pub fn delete_instance(state: State<'_, AppState>, id: String) -> Result<()> {
     let installs = state.installs.lock().unwrap();
     let running = state.running.lock().unwrap();
     if running.contains_key(&id) || installs.contains_key(&id) {
-        bail!("Najpierw zamknij grę w tej instancji");
+        bail!("Najpierw zamknij grę w tej instancji", "Close the game in this instance first");
     }
     Instance::delete(&state.ctx, &id)
 }
@@ -163,7 +176,7 @@ pub fn open_folder(state: State<'_, AppState>, id: Option<String>, sub: Option<S
     };
     if let Some(sub) = sub.filter(|s| !s.is_empty()) {
         if !sub.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
-            bail!("Niepoprawny folder");
+            bail!("Niepoprawny folder", "Invalid folder");
         }
         path = path.join(sub);
     }
@@ -185,7 +198,7 @@ pub async fn list_accounts(state: State<'_, AppState>) -> Result<Vec<AccountView
 pub async fn set_active_account(state: State<'_, AppState>, uuid: String) -> Result<Vec<AccountView>> {
     let mut accs = state.accounts.lock().await;
     if !accs.list.iter().any(|a| a.uuid == uuid) {
-        bail!("Nie ma takiego konta");
+        bail!("Nie ma takiego konta", "No such account");
     }
     accs.active = Some(uuid);
     accs.save(&state.ctx)?;

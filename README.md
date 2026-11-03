@@ -1,185 +1,125 @@
 <div align="center">
 
-<img src="public/icon.svg" width="80" alt="Patina icon" />
+<img src="public/icon.svg" width="72" alt="Patina" />
 
-# Patina — Launcher & Client
+# Patina
 
-A minimal Minecraft launcher with an optional Horizon-derived Rust client.
+**A quiet Minecraft launcher, with its own client for Fabric and a native Rust client.**
 
-**Open source · MIT · Vibecoded · Early development**
+[Download](https://project-patina.github.io/patina/) · [Releases](https://github.com/project-patina/patina/releases) · [Rust client](engine/README.md) · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
 
-[Getting started](#getting-started) · [Rust client](engine/README.md) · [Contributing](CONTRIBUTING.md) · [Licensing](#license-and-attribution)
+<img src="docs/screenshots/launcher-home.png" alt="The Patina launcher's home screen" width="860" />
 
 </div>
 
-Patina brings instance management, Microsoft sign-in, mods, skins and themes into
-a quiet desktop interface. The launcher uses **Svelte 5, TypeScript, Tauri 2 and
-Rust**. Both the launcher and the optional native Rust client are included here.
+## What it is
 
-> **Credit where it belongs:** the Rust client in `engine/` is a modified
-> derivative of [Horizon](https://github.com/horizon-rust/horizon), originally
-> created by **Ludovic Marie and the Horizon contributors**, under MIT.
-> Its original copyright and license remain in [engine/LICENSE](engine/LICENSE).
-> Renaming its crates to `patina-*` does not make inherited code original to Patina.
+Patina is a desktop launcher for Minecraft: Java Edition, built with Svelte 5, Tauri 2 and
+Rust. It keeps instances, accounts, mods and skins in one calm interface, and ships the
+**Patina Client** in two forms that look and behave the same:
 
-## Features
+- **on Fabric 26.3**, as a mod the launcher installs before each start;
+- **as a native Rust client** for 26.3, derived from [Horizon](https://github.com/horizon-rust/horizon).
 
-- Separate Vanilla, Fabric and Quilt instances, plus the optional Rust client
-  pinned to Minecraft **26.3** in this source snapshot.
-- A focused home screen, recent instances and offline NEWS with release notes.
-- Six palettes — Patina, Graphite, Ocean, Forest, Copper and Iris — with dark,
-  light and system modes.
-- Modrinth browsing and installation of mods, resource packs and shaders for
-  compatible instances.
-- Skin and cape management, a 3D preview and a pose editor.
-- Java, memory, window size, logs and per-instance launch settings.
+Linux is the main platform. Windows builds are cross-compiled and less tested; macOS is not
+supported yet.
 
-The Rust client is a separate program, not a Java mod loader. Fabric/Quilt mod
-compatibility does **not** imply those mods run in the Rust client.
+## Launcher
 
-## Vibecoded, openly
+- Fabric and Rust instances with their own folders, Java and memory settings.
+- Microsoft sign-in, several accounts, skins and capes with a 3D preview.
+- **Servers**: well-known servers with their region, players and ping, a search that
+  checks any address, and one click to start an instance and join.
+- Mods, resource packs and shaders from Modrinth for compatible instances.
+- Six palettes, dark and light modes, Polish and English.
+- Signed self-updates for the portable packages.
 
-**Patina is vibecoded.** AI coding tools have been used extensively to implement,
-iterate on and document the project, with the maintainer choosing the direction.
-AI involvement is part of the development process, not a correctness guarantee.
-Contributions should explain the change and how it was checked, whether written
-by a person or with AI assistance.
+<p align="center">
+  <img src="docs/screenshots/launcher-servers.png" alt="The Servers page" width="49%" />
+  <img src="docs/screenshots/launcher-appearance.png" alt="Appearance settings" width="49%" />
+</p>
 
-This is an early development release. Bugs and platform differences are expected.
-Launcher checks do not prove every Minecraft version, modpack or GPU works.
-Keep backups of important worlds before testing a different client or version.
+## Patina Client
 
-## Screenshots
+The same frontend in both clients: the main menu, the settings, the built-in mods and
+their look.
 
-These previews use original Patina demo artwork and synthetic accounts.
+- A main menu with a turned stack of buttons, the player's own skin and the launcher's
+  black Mono background.
+- Built-in mods: FPS counter, keystrokes and coordinates.
+- A **HUD editor** over the game itself: drag each mod where you want it, resize it with
+  its corner or the mouse wheel. What you place is exactly where it shows in game.
 
-![Home screen](docs/screenshots/home.jpg)
+<p align="center">
+  <img src="docs/screenshots/client-menu-fabric.png" alt="The Patina Client main menu on Fabric" width="49%" />
+  <img src="docs/screenshots/client-menu-rust.png" alt="The same main menu in the Rust client" width="49%" />
+</p>
 
-![Themes](docs/screenshots/themes.jpg)
+<p align="center">
+  <img src="docs/screenshots/client-hud-editor.jpg" alt="The HUD editor over a world" width="49%" />
+  <img src="docs/screenshots/client-settings.png" alt="The Patina Client settings" width="49%" />
+</p>
 
-[NEWS screenshot](docs/screenshots/news.jpg)
+## Download
 
-## Getting started
+Get the latest build from the [download page](https://project-patina.github.io/patina/)
+or the [releases](https://github.com/project-patina/patina/releases). Each package holds
+the launcher and the Rust client; unpack it anywhere and start Patina from the
+`launcher` folder. You need a Minecraft: Java Edition account.
 
-Requirements: **Node.js 22.14+**, npm, a current stable **Rust** toolchain with
-Clippy, Python 3.11+ for source-release checks, and the native dependencies in the
-[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
-Some engine crates require Rust 1.90 or newer; use a current stable toolchain.
+## Build from source
 
-### Launcher
+Requirements: Node.js 22.14+, a current stable Rust with Clippy, JDK 25 for the Fabric mod,
+Python 3.11+ and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```sh
 npm ci
-npm run app
+sh scripts/build-java-mod.sh   # the integrated Fabric mod
+npm run app                    # the launcher, in development
+sh scripts/install-engine.sh   # the Rust client (Linux)
 ```
 
-For a browser-only preview at `http://127.0.0.1:1420/`:
+`npm run dev` opens a browser preview with a fake backend at `http://127.0.0.1:1420/`.
+`sh scripts/install-dev.sh` installs **Patina Dev** beside a stable Patina, with its own
+data folder. The checks CI runs:
 
 ```sh
-npm run dev
-```
-
-The preview uses fake accounts and original SVG textures. It cannot authenticate
-Microsoft accounts or start a real game. Preview parameters include
-`?page=settings&noanim`, `?page=news`, `?onboarding` and `?fps`.
-The fake backend is excluded from production builds.
-
-### Rust client
-
-See [engine/README.md](engine/README.md) for requirements, limitations and upstream
-attribution. On Linux, after installing the engine prerequisites:
-
-```sh
-sh scripts/install-engine.sh
-```
-
-Create a Rust instance in the launcher. Game resources are prepared locally from
-the supported game installation; they are not included in this repository.
-Preparation also requires the appropriate Java/JDK runtime.
-
-### Checks and builds
-
-```sh
-npm run check
-npm test
-npm run build
-python3 -m unittest discover -s tests -p 'test_*.py'
-python3 scripts/prepare-source-release.py --check
+npm run check && npm test
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
-npx tauri build --no-bundle
+cargo test --manifest-path engine/Cargo.toml --locked -p patina-client
 ```
 
-The Linux executable is `target/release/amethyst-launcher`. Historical
-`amethyst-*` package names and the application ID are retained for data
-compatibility; the visible product is Patina. The engine is a separate workspace:
-
-```sh
-cargo check --manifest-path engine/Cargo.toml --locked -p patina-client -p patina-prepare
-```
-
-Linux is the current development environment. A Windows cross-build script is
-included; building it is not a Windows runtime compatibility guarantee. macOS has
-not been validated for this launcher snapshot.
-
-## Repository layout
-
-| Directory | Contents |
+| Folder | Contents |
 | --- | --- |
-| `src/` | Svelte frontend, themes and browser-preview fixtures |
-| `src-tauri/` | Native window, IPC commands and application integration |
-| `crates/core/` | Accounts, downloads, Java, instances and launch pipeline |
-| `engine/` | Horizon-derived Rust client, server, preparer and tests |
-| `resources/news.json` | Offline release notes |
-| `scripts/` | Build, license collection and source-release tooling |
-| `LICENSES/` | Notices for frontend fonts and libraries |
+| `src/` | The launcher's interface |
+| `src-tauri/` | Window, commands and system integration |
+| `crates/core/` | Accounts, downloads, Java, instances, servers and launching |
+| `java-mod/` | The Patina Client for Fabric |
+| `engine/` | The Rust client, server and tools |
+| `scripts/` | Builds, packaging and release tooling |
 
-## Data and accounts
+## Made with AI
 
-Linux launcher data defaults to `~/.local/share/amethyst`; `AMETHYST_ROOT` selects
-another directory. `AMETHYST_ENGINE_DIR` overrides the engine location. Keep
-accounts, tokens, worlds, logs, generated resources and local backups out of Git.
-Read [SECURITY.md](SECURITY.md) before sharing diagnostics.
+Patina is vibecoded: AI tools wrote much of it, with the maintainer setting the
+direction and checking the results. That is not a guarantee of correctness. This is
+an early release; back up important worlds before trying another client or version.
 
-The Microsoft OAuth application ID in the source is a public identifier, not a
-secret or a guarantee that every downstream build can use that registration.
-Review the account integration before distributing your own build. Never embed
-client secrets or real account fixtures. Engine network features, telemetry and
-multiplayer are separate from the launcher's offline NEWS; review those settings
-and their implementation when distributing a client build.
+## License
 
-## License and attribution
+Patina's own code is [MIT](LICENSE), © 2026 Patina contributors (project-patina).
+The Rust client is derived from Horizon by **Ludovic Marie and the Horizon contributors**,
+whose MIT notice stays in [engine/LICENSE](engine/LICENSE); see
+[engine/UPSTREAM.md](engine/UPSTREAM.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Original Patina launcher code and Patina modifications are **MIT licensed**:
-[LICENSE](LICENSE), copyright **2026 Patina contributors (project-patina)**.
-
-The Horizon-derived client retains its original MIT copyright in
-[engine/LICENSE](engine/LICENSE). Patina contributions to it have the additional
-notice [engine/LICENSE-PATINA](engine/LICENSE-PATINA). See
-[engine/UPSTREAM.md](engine/UPSTREAM.md) and
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). These notices are cumulative;
-Patina's license does not replace third-party copyrights or licenses.
-
-Minecraft game files, account skins/capes, downloaded mods and third-party packs
-are not relicensed by Patina and are excluded from the clean source export.
-You need a legitimately owned Minecraft: Java Edition account/copy for supported
-game features. **Not an official Minecraft product.** Not affiliated with or
-endorsed by Mojang, Microsoft or the Horizon maintainers.
-
-## Source releases
-
-```sh
-python3 scripts/prepare-source-release.py --output ../patina-opensource
-```
-
-This creates a clean source directory, archive, checksum and integrity manifest.
-It does not create a GitHub repository or upload anything. Read
-[docs/PUBLISHING.md](docs/PUBLISHING.md) before the first public push.
+Minecraft's game files, skins and downloaded content are not part of this repository and
+are not relicensed. **Not an official Minecraft product.** Not approved by or associated
+with Mojang or Microsoft, nor endorsed by the Horizon maintainers.
 
 ## Po polsku
 
-Patina to otwartoźródłowy, minimalistyczny launcher Minecraft z opcjonalnym
-klientem Rust opartym na Horizon. Projekt jest **vibecoded**: powstaje z dużym
-udziałem narzędzi AI. Kod launchera i wkład Patiny są na MIT; oryginalne autorstwo
-i licencja Horizon pozostają zachowane. Repozytorium nie zawiera kont, tokenów
-ani plików gry. Zasady współpracy: [CONTRIBUTING.md](CONTRIBUTING.md).
+Patina to spokojny launcher Minecraft: Java Edition z własnym klientem: modem na Fabric
+26.3 i natywnym klientem w Rust, które wyglądają i działają tak samo. Ma instancje,
+konta Microsoft, skiny, mody z Modrinth, listę serwerów i edytor HUD-u w grze.
+Pobierz go ze [strony](https://project-patina.github.io/patina/). Kod jest na licencji MIT,
+a autorstwo Horizon pozostaje zachowane.

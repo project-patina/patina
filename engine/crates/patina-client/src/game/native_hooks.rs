@@ -138,7 +138,7 @@ pub(crate) struct NativePlayer {
     pub(crate) dimension: &'static str,
 }
 
-/// A native mod as Options > Mods lists it (`native_mods`).
+/// A native mod (`native_mods`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct NativeMod {
     /// Its id: its settings folder and its keys' lines.
@@ -390,7 +390,7 @@ impl Game<'_> {
     pub(super) fn native_minimap(&self, minimap: &mut Option<NativeMinimap>) {
         let _ = minimap;
     }
-    /// Options > Mods lists the native mods: push yours.
+    /// The native mods: push yours.
     pub(super) fn native_mods(&mut self, mods: &mut Vec<NativeMod>) {
         let _ = mods;
     }
@@ -400,7 +400,9 @@ impl Game<'_> {
     pub(super) fn native_settings(&mut self, mod_id: &str, buttons: &mut Vec<String>) {
         let _ = (mod_id, buttons);
     }
-    /// Button `button` of mod `mod_id`'s settings page was clicked.
+    /// Button `button` of mod `mod_id`'s settings page was clicked. No screen of the client
+    /// shows those pages now; the hook stays for mods built against it.
+    #[allow(dead_code)]
     pub(super) fn native_settings_click(&mut self, mod_id: &str, button: usize) {
         let _ = (mod_id, button);
     }
@@ -543,7 +545,7 @@ impl GameLevel<'_> {
 // Native mods use these; nothing in Patina does.
 #[allow(dead_code)]
 impl Game<'_> {
-    /// Whether the player left mod `mod_id` on in Options > Mods. A mod
+    /// Whether `patina-mods.txt` has mod `mod_id` on. A mod
     /// turned off does nothing (check this first in each hook) until the
     /// launcher's next build leaves it out.
     pub(super) fn native_on(&self, mod_id: &str) -> bool {
@@ -720,7 +722,7 @@ impl Game<'_> {
 
 /// Where the game calls the hook points.
 impl Game<'_> {
-    /// Options > Mods' rows for the native mods, after the others.
+    /// The native mods' entries, after the others.
     pub(super) fn list_native_mods(&mut self) {
         let mut mods = Vec::new();
         self.native_mods(&mut mods);
@@ -745,28 +747,6 @@ impl Game<'_> {
                 dev: false,
                 native: Some(page),
             });
-        }
-    }
-    /// A click on button `button` of native mod `i`'s page (its index in
-    /// Options > Mods), and the page's labels after it.
-    pub(super) fn native_settings_event(&mut self, i: usize, button: usize) {
-        let Some(id) = self.settings.mods.installed.get(i).map(|m| m.id.clone()) else {
-            return;
-        };
-        self.native_settings_click(&id, button);
-        self.native_settings_refresh(i);
-    }
-    /// Native mod `i`'s page opened: its labels asked again, so that they
-    /// follow the language (and the mod's state) since the list was made.
-    pub(super) fn native_settings_refresh(&mut self, i: usize) {
-        let Some(id) = self.settings.mods.installed.get(i).map(|m| m.id.clone()) else {
-            return;
-        };
-        let mut buttons = Vec::new();
-        self.native_settings(&id, &mut buttons);
-        let row = self.settings.mods.installed.get_mut(i);
-        if let Some(page) = row.and_then(|m| m.native.as_mut()) {
-            page.buttons = buttons;
         }
     }
     /// A key event for `native_key`.

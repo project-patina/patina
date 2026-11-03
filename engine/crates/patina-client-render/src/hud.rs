@@ -110,6 +110,18 @@ pub const TRIM_SLOTS: usize = 32;
 pub fn decode(path: &Path) -> Result<(u32, u32, Vec<u8>)> {
     decode_bytes(&fs::read(path)?)
 }
+/// A JPEG in memory as RGBA pixels (custom title backgrounds).
+pub fn decode_jpeg(data: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
+    use zune_jpeg::{
+        JpegDecoder,
+        zune_core::{bytestream::ZCursor, colorspace::ColorSpace, options::DecoderOptions},
+    };
+    let options = DecoderOptions::default().jpeg_set_out_colorspace(ColorSpace::RGBA);
+    let mut decoder = JpegDecoder::new_with_options(ZCursor::new(data), options);
+    let pixels = decoder.decode().map_err(|e| e.to_string())?;
+    let (width, height) = decoder.dimensions().ok_or("JPEG without a size")?;
+    Ok((width as u32, height as u32, pixels))
+}
 /// A PNG in memory as RGBA pixels.
 pub fn decode_bytes(data: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
     let mut decoder = png::Decoder::new(std::io::Cursor::new(data));
@@ -362,6 +374,7 @@ impl HudAtlas {
             crate::minimap::SIZE as u32,
             vec![0; crate::minimap::SIZE * crate::minimap::SIZE * 4],
         ));
+        images.push((crate::title_player::SKIN_SPRITE.into(), 64, 64, vec![0; 64 * 64 * 4]));
         // Downloaded skins (game/scoreboard.rs).
         for i in 0..SKIN_SLOTS {
             images.push((format!("patina/skin{i}"), 64, 64, vec![0; 64 * 64 * 4]));
@@ -720,8 +733,8 @@ pub struct EndPortalFill {
     pub sprites: [[f32; 4]; 2],
     pub game_time: f32,
 }
-pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> u32 {
-    u32::from(a) << 24 | u32::from(b) << 16 | u32::from(g) << 8 | u32::from(r)
+pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> u32 {
+    (a as u32) << 24 | (b as u32) << 16 | (g as u32) << 8 | r as u32
 }
 impl HudBatch {
     /// Window.calculateScale: the largest scale keeping >= 320x240 GUI pixels,
@@ -1002,6 +1015,32 @@ impl HudBatch {
         let w = atlas.white;
         let uv = [(w.u0 + w.u1) / 2.0, (w.v0 + w.v1) / 2.0];
         self.quad(corners, [uv; 4], color);
+    }
+    /// A flat quad with a colour per corner.
+    pub fn fill_quad_colors(
+        &mut self,
+        atlas: &HudAtlas,
+        corners: [[f32; 2]; 4],
+        colors: [u32; 4],
+    ) {
+        let r = atlas.white;
+        let uv = [(r.u0 + r.u1) / 2.0, (r.v0 + r.v1) / 2.0];
+        for i in [0, 1, 2, 0, 2, 3] {
+            self.vertices.push(HudVertex {
+                pos: corners[i],
+                uv,
+                color: colors[i],
+                depth: 0.0,
+                glint_uv: [0.0, 0.0],
+            });
+        }
+    }
+    /// Multiply the alpha of everything drawn since `start` by `alpha`.
+    pub fn fade_since(&mut self, start: usize, alpha: f32) {
+        for v in &mut self.vertices[start..] {
+            let a = ((v.color >> 24) as f32 * alpha.clamp(0.0, 1.0)).round() as u32;
+            v.color = (v.color & 0x00ff_ffff) | a << 24;
+        }
     }
     /// GuiGraphics.fillGradient: `top` to `bottom`, down the rectangle.
     pub fn fill_gradient(
@@ -1399,11 +1438,70 @@ pub struct HudRenderer {
     vignette_pipeline: wgpu::RenderPipeline,
     end_portal_pipeline: wgpu::RenderPipeline,
     group: wgpu::BindGroup,
+    layout: wgpu::BindGroupLayout,
+    atlas_view: wgpu::TextureView,
+    glint_view: wgpu::TextureView,
+    glint_sampler: wgpu::Sampler,
     uniform: wgpu::Buffer,
     buffer: wgpu::Buffer,
     capacity: u64,
 }
 impl HudRenderer {
+    fn resources(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        uniform: &wgpu::Buffer,
+        view: &wgpu::TextureView,
+        sampler: &wgpu::Sampler,
+        glint_view: &wgpu::TextureView,
+        glint_sampler: &wgpu::Sampler,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("HUD resources"),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(glint_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Sampler(glint_sampler),
+                },
+            ],
+        })
+    }
+    /// Samples the atlas linearly: the boot splash's sheet, scaled by a non-integer factor.
+    /// The game's atlas stays nearest.
+    pub fn filter_atlas_linearly(&mut self, device: &wgpu::Device) {
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("HUD, linear"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+        self.group = Self::resources(
+            device,
+            &self.layout,
+            &self.uniform,
+            &self.atlas_view,
+            &sampler,
+            &self.glint_view,
+            &self.glint_sampler,
+        );
+    }
     pub fn new(
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
@@ -1472,32 +1570,15 @@ impl HudRenderer {
                 },
             ],
         });
-        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("HUD resources"),
-            layout: &layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(glint_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::Sampler(glint_sampler),
-                },
-            ],
-        });
+        let group = Self::resources(
+            device,
+            &layout,
+            &uniform,
+            view,
+            &sampler,
+            glint_view,
+            glint_sampler,
+        );
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("HUD layout"),
             bind_group_layouts: &[Some(&layout)],
@@ -1625,6 +1706,10 @@ impl HudRenderer {
             vignette_pipeline,
             end_portal_pipeline,
             group,
+            layout,
+            atlas_view: view.clone(),
+            glint_view: glint_view.clone(),
+            glint_sampler: glint_sampler.clone(),
             uniform,
             buffer,
             capacity,

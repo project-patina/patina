@@ -1,5 +1,5 @@
 //! Mods in the game (`docs/mods.md`): content mods' blocks, items, data and
-//! assets (`content_root`), and the Mods page's rows. Code mods are native
+//! assets (`content_root`). Code mods are native
 //! (`native_hooks.rs`); WebAssembly code mods don't run any more.
 use super::Game;
 use patina_client::{
@@ -19,7 +19,7 @@ pub(super) struct ModsState {
 /// `root` with the content mods that are on layered over it
 /// (docs/modpacks.md): their blocks, items, data and assets. Read once at
 /// start, before the resources load; a mod whose content is refused is left
-/// out here and its row on the Mods page says why.
+/// out here and the log says why.
 pub(super) fn content_root(
     root: &std::path::Path,
     enabled: &std::collections::BTreeSet<String>,
@@ -81,13 +81,13 @@ pub(super) fn content_root(
     }
 }
 
-/// A WebAssembly code mod's row on the Mods page.
+/// A WebAssembly code mod's entry in the list.
 const STOPPED: &str = "Doesn't run any more: needs a native port";
 /// The player was told once about the WebAssembly mods that stopped (`patina-mods/<this>`).
 const NOTICE_SEEN: &str = ".native-notice";
 
 impl Game<'_> {
-    /// Lists the installed mods on the Mods page. Content mods load with the resources
+    /// Lists the installed mods. Content mods load with the resources
     /// (`content_root`); native ones are built into the game (`native_hooks.rs`). WebAssembly code
     /// mods don't run any more: their rows say so, and the player hears it once in the chat
     /// (`tell_native_now`).
@@ -147,7 +147,7 @@ impl Game<'_> {
             return;
         }
         self.system_message(Text::literal(format!(
-            "Patina mods are native now: {names} stopped running until they have a native version. The launcher's Mods page has the native ones."
+            "Patina mods are native now: {names} stopped running until they have a native version."
         )));
         let _ = std::fs::write(&seen, "");
     }

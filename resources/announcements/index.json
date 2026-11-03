@@ -1,0 +1,17 @@
+[
+  {
+    "id": "first-version",
+    "date": "2026-11-01",
+    "image": "images/first-version.png",
+    "pl": {
+      "title": "Patina: pierwsza wersja",
+      "summary": "Co potrafi launcher.",
+      "markdown": "first-version.pl.md"
+    },
+    "en": {
+      "title": "Patina: first version",
+      "summary": "What the launcher does.",
+      "markdown": "first-version.en.md"
+    }
+  }
+]

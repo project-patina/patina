@@ -76,13 +76,8 @@ pub enum Event {
     /// `ClientboundServerLinksPacket`: the links the pause menu's "Server
     /// Links..." lists (ClientCommonPacketListenerImpl.handleServerLinks).
     ServerLinks(Vec<cfg::ServerLink>),
-    /// The connection ended. `from_server`: the server gave the reason (or
-    /// the connection was refused for good), rather than the connection
-    /// failing (auto-reconnect retries only failures and shutdowns).
-    Disconnected {
-        reason: String,
-        from_server: bool,
-    },
+    /// The connection ended.
+    Disconnected { reason: String },
 }
 
 pub struct Session {
@@ -202,15 +197,11 @@ impl Session {
                     transferred,
                     &resources,
                 );
-                let from_server = result.is_ok();
                 let reason = result.unwrap_or_else(|e| e);
                 if let Some(w) = thread_writer.lock().unwrap().take() {
                     w.shutdown();
                 }
-                let _ = send.send(Event::Disconnected {
-                    reason,
-                    from_server,
-                });
+                let _ = send.send(Event::Disconnected { reason });
             })
             .ok();
         let debug = std::env::var_os("PATINA_NET_DEBUG").is_some();
@@ -318,68 +309,6 @@ impl Drop for Session {
     }
 }
 
-/// An address of the form `friend:K7QM-3XPD` joins a friend's world through
-/// its invite code (patina-friends): the session goes through a tunnel the
-/// client reaches on a loopback port, so everything after is a plain join.
-pub const FRIEND: &str = patina_friends::ADDRESS_PREFIX;
-
-/// An address as players and logs see it: a friend's invite code stays
-/// out of it (its secret is in there).
-pub fn shown_address(address: &str) -> String {
-    match address.strip_prefix(FRIEND) {
-        Some(code) => match patina_friends::invite::parse(code) {
-            Some(patina_friends::invite::Parsed::Short(c)) => {
-                format!("Friend's world ({}-****)", c.nameplate)
-            }
-            _ => "Friend's world".to_owned(),
-        },
-        None => address.to_owned(),
-    }
-}
-
-/// The relay the player set (`friendsRelay` in patina.txt, beside
-/// options.txt), else `PATINA_RELAY_URL`. None by default.
-pub fn friends_relay_setting() -> Option<String> {
-    let dir = std::env::current_dir().ok()?;
-    crate::ui_theme::preference(&dir, "friendsRelay")
-        .filter(|r| !r.is_empty())
-        .or_else(patina_friends::relay_url)
-}
-/// Remember the relay typed on Join a friend (empty forgets it).
-pub fn save_friends_relay(relay: &str) {
-    if let Ok(dir) = std::env::current_dir() {
-        crate::ui_theme::set_preference(&dir, "friendsRelay", (!relay.is_empty()).then_some(relay));
-    }
-}
-
-/// Reach the friend's world from the code (directly, or through a relay)
-/// and open the tunnel: the loopback address to connect to.
-fn join_friend(code: &str, send: &Sender<Event>) -> Result<(String, u16), String> {
-    use patina_friends::{
-        PathMode,
-        guest::{self, GuestConfig},
-    };
-    status(send, "Finding your friend's world...");
-    let tunnel = guest::join(&GuestConfig {
-        code: code.to_owned(),
-        relay: friends_relay_setting(),
-        protocol: PROTOCOL_VERSION,
-        game: patina_protocol::GAME_VERSION.to_owned(),
-        path: PathMode::from_env(),
-    })
-    .map_err(|e| e.to_string())?;
-    status(
-        send,
-        if tunnel.direct {
-            "Connected straight to your friend..."
-        } else {
-            "Connected to your friend through the relay..."
-        },
-    );
-    let (port, _) = tunnel.serve_loopback().map_err(|e| e.to_string())?;
-    Ok(("127.0.0.1".to_owned(), port))
-}
-
 fn status(send: &Sender<Event>, text: &str) {
     let _ = send.send(Event::Status(text.to_owned()));
 }
@@ -398,20 +327,10 @@ fn tr(lang: &Language, key: &str) -> String {
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// `Connection.connect`: the socket to a server, with `read_timeout`
-/// ([`READ_TIMEOUT`]) on every read. The friends relay supplies a concrete
-/// endpoint, not a Minecraft hostname, so it skips the SRV lookup.
-fn connect_tcp(
-    host: &str,
-    port: u16,
-    relayed: bool,
-    read_timeout: Duration,
-) -> Result<Connection, String> {
-    let c = if relayed {
-        Connection::connect(host, port, Duration::from_secs(10))
-    } else {
-        Connection::connect_server(host, port, Duration::from_secs(10))
-    }
-    .map_err(|e| e.to_string())?;
+/// ([`READ_TIMEOUT`]) on every read.
+fn connect_tcp(host: &str, port: u16, read_timeout: Duration) -> Result<Connection, String> {
+    let c = Connection::connect_server(host, port, Duration::from_secs(10))
+        .map_err(|e| e.to_string())?;
     c.reader
         .set_read_timeout(Some(read_timeout))
         .map_err(|e| e.to_string())?;
@@ -458,17 +377,11 @@ fn run(
     let (host, port, mut c) = if let Some(pipe) = local {
         (address.to_owned(), 0, Connection::local(pipe))
     } else {
-        let (host, port) = match address.strip_prefix(FRIEND) {
-            Some(code) => join_friend(code, send)?,
-            None => {
-                let Some(target) = parse_address(address) else {
-                    return Ok(format!("Invalid server address: {address}"));
-                };
-                status(send, "Connecting to the server...");
-                target
-            }
+        let Some((host, port)) = parse_address(address) else {
+            return Ok(format!("Invalid server address: {address}"));
         };
-        let c = connect_tcp(&host, port, address.starts_with(FRIEND), READ_TIMEOUT)?;
+        status(send, "Connecting to the server...");
+        let c = connect_tcp(&host, port, READ_TIMEOUT)?;
         (host, port, c)
     };
     *shared_counters.lock().unwrap() = Some(c.reader.counters.clone());
@@ -918,7 +831,7 @@ mod tests {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let held = std::thread::spawn(move || listener.accept().map(|(stream, _)| stream));
-        let c = connect_tcp("127.0.0.1", port, true, Duration::from_millis(300)).unwrap();
+        let c = connect_tcp("127.0.0.1", port, Duration::from_millis(300)).unwrap();
         let _server = held.join().unwrap().unwrap();
         let (mut reader, writer) = c.split();
         let (done, result) = channel();

@@ -217,6 +217,7 @@ pub(super) fn buttons(w: f32, h: f32, creative: bool, o: &WorldOptions) -> Vec<B
         x,
         y,
         w,
+        h: 20.0,
         label,
         enabled,
         id,

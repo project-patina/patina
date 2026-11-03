@@ -115,25 +115,25 @@ impl PackAtlas {
 
 /// GLSL: the face normal and tangent of a flat-drawn vertex, from its quad's first three corners
 /// (quads are four consecutive vertices of the page; position words 0-2, UV word 3).
-const FACE: &str = "    uint hz_q = (uint(gl_VertexIndex) & ~3u) * 6u;\n    \
-    vec3 hz_p0 = uintBitsToFloat(uvec3(hz_vertices[hz_q], hz_vertices[hz_q + 1u], hz_vertices[hz_q + 2u]));\n    \
-    vec3 hz_p1 = uintBitsToFloat(uvec3(hz_vertices[hz_q + 6u], hz_vertices[hz_q + 7u], hz_vertices[hz_q + 8u]));\n    \
-    vec3 hz_p2 = uintBitsToFloat(uvec3(hz_vertices[hz_q + 12u], hz_vertices[hz_q + 13u], hz_vertices[hz_q + 14u]));\n    \
-    uvec3 hz_w = uvec3(hz_vertices[hz_q + 3u], hz_vertices[hz_q + 9u], hz_vertices[hz_q + 15u]);\n    \
-    vec2 hz_t0 = vec2(hz_w.x & 65535u, hz_w.x >> 16u);\n    \
-    vec2 hz_d1 = vec2(hz_w.y & 65535u, hz_w.y >> 16u) - hz_t0;\n    \
-    vec2 hz_d2 = vec2(hz_w.z & 65535u, hz_w.z >> 16u) - hz_t0;\n    \
-    vec3 hz_e1 = hz_p1 - hz_p0;\n    \
-    vec3 hz_e2 = hz_p2 - hz_p0;\n    \
-    vec3 hz_n = cross(hz_e1, hz_e2);\n    \
-    if (dot(hz_n, hz_n) > 1e-12) {\n        \
-        hz_Normal = normalize(hz_n);\n        \
-        float hz_r = hz_d1.x * hz_d2.y - hz_d2.x * hz_d1.y;\n        \
-        vec3 hz_t = (hz_e1 * hz_d2.y - hz_e2 * hz_d1.y) * sign(hz_r);\n        \
-        vec3 hz_b = (hz_e2 * hz_d1.x - hz_e1 * hz_d2.x) * sign(hz_r);\n        \
-        if (dot(hz_t, hz_t) > 1e-12) {\n            \
-            hz_t = normalize(hz_t - hz_Normal * dot(hz_Normal, hz_t));\n            \
-            hz_tangent = vec4(hz_t, dot(cross(hz_t, hz_Normal), hz_b) < 0.0 ? -1.0 : 1.0);\n        \
+const FACE: &str = "    uint pt_q = (uint(gl_VertexIndex) & ~3u) * 6u;\n    \
+    vec3 pt_p0 = uintBitsToFloat(uvec3(pt_vertices[pt_q], pt_vertices[pt_q + 1u], pt_vertices[pt_q + 2u]));\n    \
+    vec3 pt_p1 = uintBitsToFloat(uvec3(pt_vertices[pt_q + 6u], pt_vertices[pt_q + 7u], pt_vertices[pt_q + 8u]));\n    \
+    vec3 pt_p2 = uintBitsToFloat(uvec3(pt_vertices[pt_q + 12u], pt_vertices[pt_q + 13u], pt_vertices[pt_q + 14u]));\n    \
+    uvec3 pt_w = uvec3(pt_vertices[pt_q + 3u], pt_vertices[pt_q + 9u], pt_vertices[pt_q + 15u]);\n    \
+    vec2 pt_t0 = vec2(pt_w.x & 65535u, pt_w.x >> 16u);\n    \
+    vec2 pt_d1 = vec2(pt_w.y & 65535u, pt_w.y >> 16u) - pt_t0;\n    \
+    vec2 pt_d2 = vec2(pt_w.z & 65535u, pt_w.z >> 16u) - pt_t0;\n    \
+    vec3 pt_e1 = pt_p1 - pt_p0;\n    \
+    vec3 pt_e2 = pt_p2 - pt_p0;\n    \
+    vec3 pt_n = cross(pt_e1, pt_e2);\n    \
+    if (dot(pt_n, pt_n) > 1e-12) {\n        \
+        pt_Normal = normalize(pt_n);\n        \
+        float pt_r = pt_d1.x * pt_d2.y - pt_d2.x * pt_d1.y;\n        \
+        vec3 pt_t = (pt_e1 * pt_d2.y - pt_e2 * pt_d1.y) * sign(pt_r);\n        \
+        vec3 pt_b = (pt_e2 * pt_d1.x - pt_e1 * pt_d2.x) * sign(pt_r);\n        \
+        if (dot(pt_t, pt_t) > 1e-12) {\n            \
+            pt_t = normalize(pt_t - pt_Normal * dot(pt_Normal, pt_t));\n            \
+            pt_tangent = vec4(pt_t, dot(cross(pt_t, pt_Normal), pt_b) < 0.0 ? -1.0 : 1.0);\n        \
         }\n    \
     }\n";
 
@@ -142,25 +142,25 @@ impl PackAtlas {
     /// `vs_terrain` or, for `flat` draws, `vs_terrain_flat`), in atlas coordinates.
     pub fn terrain_inputs(&self, flat: bool) -> patina_shaders::GbuffersInputs {
         let mut declarations = String::from(
-            "layout(location = 0) in vec3 hz_v_pos;\nlayout(location = 1) in uvec2 hz_v_uv;\n\
-             layout(location = 2) in uint hz_v_layer;\nlayout(location = 3) in vec4 hz_v_color;\n\
-             layout(location = 4) in uvec2 hz_v_light;\n",
+            "layout(location = 0) in vec3 pt_v_pos;\nlayout(location = 1) in uvec2 pt_v_uv;\n\
+             layout(location = 2) in uint pt_v_layer;\nlayout(location = 3) in vec4 pt_v_color;\n\
+             layout(location = 4) in uvec2 pt_v_light;\n",
         );
         let origin = if flat {
             declarations.push_str(
-                "layout(set = 1, binding = 0) readonly buffer HzBlockSlots { uint hz_block_slots[]; };\n\
-                 layout(set = 1, binding = 1) readonly buffer HzSlotOrigins { vec4 hz_slot_origins[]; };\n",
+                "layout(set = 1, binding = 0) readonly buffer PtBlockSlots { uint pt_block_slots[]; };\n\
+                 layout(set = 1, binding = 1) readonly buffer PtSlotOrigins { vec4 pt_slot_origins[]; };\n",
             );
             // `mc_Entity` of each sprite layer: id, then 1 for fluids or -1 (the game's table),
             // and the arena page's vertices (`TerrainVertex`, six words each).
             declarations.push_str(
-                "layout(set = 3, binding = 0) readonly buffer HzBlockIds { int hz_block_ids[]; };\n\
-                 layout(set = 3, binding = 1) readonly buffer HzVertices { uint hz_vertices[]; };\n",
+                "layout(set = 3, binding = 0) readonly buffer PtBlockIds { int pt_block_ids[]; };\n\
+                 layout(set = 3, binding = 1) readonly buffer PtVertices { uint pt_vertices[]; };\n",
             );
-            "hz_slot_origins[hz_block_slots[uint(gl_VertexIndex) >> 8u]]"
+            "pt_slot_origins[pt_block_slots[uint(gl_VertexIndex) >> 8u]]"
         } else {
-            declarations.push_str("layout(location = 5) in vec4 hz_v_origin;\n");
-            "hz_v_origin"
+            declarations.push_str("layout(location = 5) in vec4 pt_v_origin;\n");
+            "pt_v_origin"
         };
         let [width, height] = self.size();
         let scale = [
@@ -171,26 +171,26 @@ impl PackAtlas {
         // UVs past a sprite (models up to 2, distant tiles) cannot repeat in an atlas: clamped.
         // The colour's alpha holds HDR's emission level (`mesher::EMISSION_BITS`): packs get 1.
         let body = format!(
-            "    vec4 hz_origin = {origin};\n    \
-             uint hz_layer = hz_v_layer & 32767u;\n    \
-             hz_cell = vec2(float(hz_layer % {columns}u), float(hz_layer / {columns}u));\n    \
-             hz_scale = vec2({:?}, {:?});\n    \
-             hz_Vertex = vec4(hz_v_pos + hz_origin.xyz, 1.0);\n    \
-             hz_MultiTexCoord0 = vec4((hz_cell + clamp(vec2(hz_v_uv) * hz_origin.w, 0.0, 1.0)) * hz_scale, 0.0, 1.0);\n    \
-             hz_MultiTexCoord1 = vec4(float(hz_v_light.y), float(hz_v_light.x), 0.0, 1.0);\n    \
-             hz_MultiTexCoord2 = hz_MultiTexCoord1;\n    \
-             hz_Color = vec4(hz_v_color.rgb, 1.0);\n    \
-             hz_Normal = vec3(0.0, 1.0, 0.0);\n    \
-             hz_tangent = vec4(1.0, 0.0, 0.0, 1.0);\n",
+            "    vec4 pt_origin = {origin};\n    \
+             uint pt_layer = pt_v_layer & 32767u;\n    \
+             pt_cell = vec2(float(pt_layer % {columns}u), float(pt_layer / {columns}u));\n    \
+             pt_scale = vec2({:?}, {:?});\n    \
+             pt_Vertex = vec4(pt_v_pos + pt_origin.xyz, 1.0);\n    \
+             pt_MultiTexCoord0 = vec4((pt_cell + clamp(vec2(pt_v_uv) * pt_origin.w, 0.0, 1.0)) * pt_scale, 0.0, 1.0);\n    \
+             pt_MultiTexCoord1 = vec4(float(pt_v_light.y), float(pt_v_light.x), 0.0, 1.0);\n    \
+             pt_MultiTexCoord2 = pt_MultiTexCoord1;\n    \
+             pt_Color = vec4(pt_v_color.rgb, 1.0);\n    \
+             pt_Normal = vec3(0.0, 1.0, 0.0);\n    \
+             pt_tangent = vec4(1.0, 0.0, 0.0, 1.0);\n",
             scale[0], scale[1],
         );
         let mut body = body;
         if flat {
             body.push_str(FACE);
         }
-        declarations.push_str("vec2 hz_cell; vec2 hz_scale; vec4 hz_tangent;\n");
+        declarations.push_str("vec2 pt_cell; vec2 pt_scale; vec4 pt_tangent;\n");
         let entity = if flat {
-            "vec4(float(hz_block_ids[2u * hz_layer]), float(hz_block_ids[2u * hz_layer + 1u]), 0.0, 0.0)"
+            "vec4(float(pt_block_ids[2u * pt_layer]), float(pt_block_ids[2u * pt_layer + 1u]), 0.0, 0.0)"
         } else {
             "vec4(-1.0, -1.0, 0.0, 0.0)"
         };
@@ -198,14 +198,14 @@ impl PackAtlas {
             ("mc_Entity", entity),
             (
                 "mc_midTexCoord",
-                "vec4((hz_cell + 0.5) * hz_scale, 0.0, 1.0)",
+                "vec4((pt_cell + 0.5) * pt_scale, 0.0, 1.0)",
             ),
-            ("at_tangent", "hz_tangent"),
-            ("vaPosition", "hz_Vertex.xyz"),
-            ("vaUV0", "hz_MultiTexCoord0.xy"),
-            ("vaUV2", "hz_MultiTexCoord1.xy"),
-            ("vaColor", "hz_Color"),
-            ("vaNormal", "hz_Normal"),
+            ("at_tangent", "pt_tangent"),
+            ("vaPosition", "pt_Vertex.xyz"),
+            ("vaUV0", "pt_MultiTexCoord0.xy"),
+            ("vaUV2", "pt_MultiTexCoord1.xy"),
+            ("vaColor", "pt_Color"),
+            ("vaNormal", "pt_Normal"),
         ];
         patina_shaders::GbuffersInputs {
             declarations,

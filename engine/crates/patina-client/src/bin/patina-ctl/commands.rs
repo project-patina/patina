@@ -54,7 +54,7 @@ impl Group {
             Group::Move => "Move and look",
             Group::Act => "Act on the world",
             Group::Screens => "Screens, menus and chat",
-            Group::Multiplayer => "Multiplayer, LAN and friends",
+            Group::Multiplayer => "Multiplayer and LAN",
             Group::World => "World and cheats",
             Group::Scripting => "Scripting and benchmarks",
         }
@@ -142,14 +142,9 @@ const PAGES: Ty = Ty::Enum(&[
     "language",
     "font",
     "packs",
-    "mods",
     "shader-packs",
-    "graphics",
-    "graphics-advanced",
-    "graphics-hdr",
-    "extras",
-    "patina",
-    "agent",
+    "credits",
+    "client",
 ]);
 
 /// `--confirm`, required by destructive commands: the player agreed.
@@ -164,7 +159,7 @@ const CONFIRM: Param = Param {
 /// MCP tools that delete or overwrite the player's things (`destructiveHint`).
 pub const DESTRUCTIVE: &[&str] = &["world-delete", "fill", "setblock"];
 /// MCP tools that reach other players or the network (`openWorldHint`): only when the player asks.
-pub const OPEN_WORLD: &[&str] = &["connect", "lan", "friends", "chat", "command"];
+pub const OPEN_WORLD: &[&str] = &["connect", "lan", "chat", "command"];
 
 macro_rules! cmd {
     ($name:expr, $group:ident, $usage:expr, $summary:expr, $details:expr, [$($ex:expr),* $(,)?], $params:expr, mcp: $mcp:expr, local: $local:expr $(, wire: $wire:expr)?) => {
@@ -380,7 +375,7 @@ pub const COMMANDS: &[Cmd] = &[
     cmd!("respawn", Screens, "respawn", "respawn from the death screen", "", ["patina-ctl respawn"], &[], mcp: true, local: false),
     cmd!("pause", Screens, "pause", "open the pause menu", "", ["patina-ctl pause"], &[], mcp: true, local: false),
     cmd!("resume", Screens, "resume", "leave the pause menu", "", ["patina-ctl resume"], &[], mcp: true, local: false),
-    cmd!("options", Screens, "options [PAGE]", "open the options screen, or one of its pages (Patina's too)",
+    cmd!("options", Screens, "options [PAGE]", "open the options screen, or one of its pages",
         "Then ui lists its widgets and click, set and type change them, as with the mouse. options-set changes an options.txt value without the screen.",
         ["patina-ctl options video", "patina-ctl options patina"], &[opt("page", PAGES, "the page (default: the main options)")], mcp: true, local: false),
     cmd!("book", Screens, "book [next|back|take|done]", "the open book or lectern: its page text, or press one of its buttons",
@@ -391,10 +386,10 @@ pub const COMMANDS: &[Cmd] = &[
         "As the inventory key does while riding; also opens the nearest one's.", ["patina-ctl mount-menu"], &[], mcp: true, local: false),
     cmd!("chat-log", Screens, "chat-log [N]", "the newest N chat messages", "", ["patina-ctl chat-log 5"], &[], mcp: false, local: false),
     // Multiplayer
-    cmd!("connect", Multiplayer, "connect ADDRESS [NAME]", "join a multiplayer server, or a friend's world by its invite code, from the title screen",
-        "ADDRESS is HOST[:PORT], or friend:CODE for an invite code. Only when the player asks: it reaches the network.",
-        ["patina-ctl connect play.example.net", "patina-ctl connect localhost:25565", "patina-ctl connect friend:0B33K-Q405Q-..."],
-        &[p("address", Ty::Str, "HOST[:PORT] or friend:CODE"), opt("name", Ty::Str, "player name when offline")], mcp: true, local: false),
+    cmd!("connect", Multiplayer, "connect ADDRESS [NAME]", "join a multiplayer server from the title screen",
+        "ADDRESS is HOST[:PORT]. Only when the player asks: it reaches the network.",
+        ["patina-ctl connect play.example.net", "patina-ctl connect localhost:25565"],
+        &[p("address", Ty::Str, "HOST[:PORT]"), opt("name", Ty::Str, "player name when offline")], mcp: true, local: false),
     cmd!("disconnect", Multiplayer, "disconnect", "leave the server, back to the server list", "", ["patina-ctl disconnect"], &[], mcp: true, local: false),
     cmd!("servers", Multiplayer, "servers", "the Multiplayer screen's server list: name and address",
         "Add, edit and remove them on the Multiplayer screen (click-button Multiplayer, then ui).", ["patina-ctl servers"], &[], mcp: true, local: false),
@@ -402,9 +397,6 @@ pub const COMMANDS: &[Cmd] = &[
         "PORT 0 or none picks one; commands lets guests use cheats; force forces the game mode. Only when the player asks.",
         ["patina-ctl lan open", "patina-ctl lan status", "patina-ctl lan close"],
         &[p("action", Ty::Enum(&["open", "close", "status"]), "what to do"), opt("port", Ty::Int, "port for open"), opt("commands", Ty::Bool, "allow cheats"), opt("force", Ty::Bool, "force the game mode")], mcp: true, local: false),
-    cmd!("friends", Multiplayer, "friends host|stop|status", "Play with Friends: share the open world behind an invite code, stop, or see who joined",
-        "status gives the code: share it only when the player asks. Friends join with connect friend:CODE.",
-        ["patina-ctl friends host", "patina-ctl friends status"], &[p("action", Ty::Enum(&["host", "stop", "status"]), "what to do")], mcp: true, local: false),
     // World
     cmd!("give", World, "give ITEM [COUNT]", "add items to the inventory", "", ["patina-ctl give oak_log 16"],
         &[p("item", Ty::Str, "item id"), opt("count", Ty::Int, "how many (default 1)")], mcp: true, local: false),

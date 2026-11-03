@@ -1,6 +1,6 @@
 //! Which of the installed Patina mods are on (`docs/mods.md`), kept in
 //! `patina-mods.txt` beside `options.txt` as `mod.<id>:true` lines. Every
-//! mod is off until the player turns it on in Options > Mods. A native mod is
+//! mod is off until `patina-mods.txt` turns it on. A native mod is
 //! built in, so on until turned off (`mod.<id>:false`); the launcher builds
 //! only the native mods whose line is `true`.
 use std::{
@@ -10,7 +10,7 @@ use std::{
 };
 
 pub const FILE: &str = "patina-mods.txt";
-/// The folder holding `.hmod` files, beside `options.txt`.
+/// The folder holding `.pmod` files, beside `options.txt`.
 pub const DIR: &str = "patina-mods";
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -23,11 +23,11 @@ pub struct ModList {
     /// The keys the player chose for mods' keys, mod id → key name → key
     /// (`key.<id>.<name>:key.keyboard.x` lines).
     pub keys: BTreeMap<String, BTreeMap<String, String>>,
-    /// What the Mods page shows, filled by the game from the mods it found.
+    /// The mods found, filled by the game from the mods it found.
     pub installed: Vec<Installed>,
 }
 
-/// One installed mod as the Mods page shows it.
+/// One installed mod.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Installed {
     pub id: String,

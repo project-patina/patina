@@ -18,7 +18,7 @@ patina-items = { path = "../patina-items" }
 patina-protocol = { path = "../patina-protocol" }
 patina-shader-api = { path = "../patina-shader-api" }
 patina-shaders = { path = "../patina-shaders" }
-patina-telemetry = { path = "../patina-telemetry", default-features = false, features = ["live"] }
+patina-telemetry = { path = "../patina-telemetry", default-features = false }
 patina-theme = { path = "../patina-theme" }
 patina-threads = { path = "../patina-threads" }
 patina-world = { path = "../patina-world" }
@@ -42,6 +42,7 @@ unicode-bidi = "0.3.18"
 ureq = { version = "2", default-features = false, features = ["tls"] }
 wgpu = { version = "30.0.1", default-features = false, features = ["std", "parking_lot", "vulkan", "metal", "wgsl", "naga-ir"] }
 winit = "0.30.13"
+zune-jpeg = "0.5"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [target.'cfg(unix)'.dependencies]

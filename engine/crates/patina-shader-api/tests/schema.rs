@@ -1,4 +1,4 @@
-//! Schema 1 of `patina-shaders.toml` and the `.hshader` package.
+//! Schema 1 of `patina-shaders.toml` and the `.pshader` package.
 use patina_shader_api::{MANIFEST, Manifest, OptionKind, Pack};
 use std::{collections::BTreeMap, path::Path};
 
@@ -186,7 +186,7 @@ fn reads_the_sample_folder_and_its_package_alike() {
     );
     let dir = std::env::temp_dir().join(format!("patina-shader-api-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let path = dir.join("sample_pack.hshader");
+    let path = dir.join("sample_pack.pshader");
     std::fs::write(&path, &bytes).unwrap();
     let packaged = Pack::read(&path).unwrap();
     std::fs::remove_dir_all(&dir).unwrap();

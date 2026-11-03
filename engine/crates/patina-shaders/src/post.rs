@@ -871,8 +871,8 @@ mod tests {
         ];
         let pack = Pack::from_zip_bytes("t", zip(&files)).unwrap();
         let game = crate::GbuffersInputs {
-            declarations: "layout(location = 0) in vec3 hz_v_pos;".into(),
-            body: "    hz_Vertex = vec4(hz_v_pos, 1.0);\n".into(),
+            declarations: "layout(location = 0) in vec3 pt_v_pos;".into(),
+            body: "    pt_Vertex = vec4(pt_v_pos, 1.0);\n".into(),
             ..Default::default()
         };
         let inputs = GameInputs {
@@ -943,8 +943,8 @@ mod tests {
         let pack = Pack::open(&dir).unwrap();
         let macros = Macros::standard();
         let inputs = crate::GbuffersInputs {
-            declarations: "layout(location = 0) in vec3 hz_v_pos;".into(),
-            body: "    hz_Vertex = vec4(hz_v_pos, 1.0);\n    hz_Color = vec4(1.0);\n".into(),
+            declarations: "layout(location = 0) in vec3 pt_v_pos;".into(),
+            body: "    pt_Vertex = vec4(pt_v_pos, 1.0);\n    pt_Color = vec4(1.0);\n".into(),
             ..Default::default()
         };
         let inputs = GameInputs {

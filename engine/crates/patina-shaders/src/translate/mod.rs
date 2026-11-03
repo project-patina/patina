@@ -9,8 +9,8 @@
 //!   (`sampler2D(t, s)`), or passed as two arguments to the pack's own functions.
 //! - The compatibility built-ins (`gl_Vertex`, `gl_MultiTexCoordN`, `gl_*Matrix`, `ftransform()`,
 //!   `gl_FragData`, `gl_FragColor`, `gl_TexCoord`, `texture2D`...) become declarations of ours,
-//!   named with the reserved prefix `hz_`; varyings get locations by name across the stages.
-//! - The pack's `main` becomes `hz_main`, called by a `main` of ours that sets the inputs and
+//!   named with the reserved prefix `pt_`; varyings get locations by name across the stages.
+//! - The pack's `main` becomes `pt_main`, called by a `main` of ours that sets the inputs and
 //!   adapts GL's conventions (spec 5.5): clip y is negated for every target but the window, so
 //!   memory rows are GL's rows and `gl_FragCoord` needs no change, and clip z goes from GL's
 //!   [-w, w] to [0, w], so stored depth is GL's window depth.
@@ -36,9 +36,9 @@ use scan::Stage;
 #[derive(Debug, Default, PartialEq)]
 pub struct Interface {
     /// The uniform block at binding 0: its size and each value's name, GLSL type and offset.
-    /// Ours come first: `hz_target` (the target's width, height, 1/width, 1/height), and the
-    /// fixed-function fog the compatibility `gl_Fog` reads (OQ-28): `hz_fog_color` (vanilla's fog
-    /// colour) and `hz_fog` (density, start, end, 1 / (end - start)).
+    /// Ours come first: `pt_target` (the target's width, height, 1/width, 1/height), and the
+    /// fixed-function fog the compatibility `gl_Fog` reads (OQ-28): `pt_fog_color` (vanilla's fog
+    /// colour) and `pt_fog` (density, start, end, 1 / (end - start)).
     pub uniform_size: u32,
     pub uniforms: Vec<Uniform>,
     /// Each sampler: texture at `binding`, sampler object at `binding + 1`.
@@ -50,7 +50,7 @@ pub struct Interface {
 }
 
 /// The uniforms a gbuffers program reads per draw (5.3's "D"), in a block of their own
-/// (`HzDraw`, std140: three ints, a pad, a vec4; 32 bytes) the game sets for each draw.
+/// (`PtDraw`, std140: three ints, a pad, a vec4; 32 bytes) the game sets for each draw.
 pub const DRAW_UNIFORMS: [(&str, &str); 4] = [
     ("renderStage", "int"),
     ("entityId", "int"),
@@ -103,8 +103,8 @@ pub enum Target {
 pub struct GbuffersInputs {
     /// GLSL declarations: the vertex inputs and any bindings of set 1.
     pub declarations: String,
-    /// GLSL statements that set `hz_Vertex`, `hz_Color`, `hz_MultiTexCoord0`,
-    /// `hz_MultiTexCoord1` and `hz_Normal` (the compatibility inputs), run first in `main`.
+    /// GLSL statements that set `pt_Vertex`, `pt_Color`, `pt_MultiTexCoord0`,
+    /// `pt_MultiTexCoord1` and `pt_Normal` (the compatibility inputs), run first in `main`.
     pub body: String,
     /// The value of each attribute a pack may declare (`mc_Entity`, `vaPosition`...), as a GLSL
     /// expression of the declared type's size; an attribute not listed reads zero.
@@ -180,14 +180,14 @@ pub fn translate_shadow(
 }
 
 /// The matrices of the compatibility profile in a gbuffers-style program, from the frame's.
-const GBUFFERS_MATRICES: &str = "    hz_ModelViewMatrix = gbufferModelView;\n    \
-     hz_ProjectionMatrix = gbufferProjection;\n    \
-     hz_ModelViewProjectionMatrix = gbufferProjection * gbufferModelView;\n    \
-     hz_ModelViewMatrixInverse = gbufferModelViewInverse;\n    \
-     hz_ProjectionMatrixInverse = gbufferProjectionInverse;\n    \
-     hz_NormalMatrix = mat3(gbufferModelView);\n    \
-     mat4 hz_light = mat4(vec4(1.0 / 256.0, 0.0, 0.0, 0.0), vec4(0.0, 1.0 / 256.0, 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0), vec4(1.0 / 32.0, 1.0 / 32.0, 0.0, 1.0));\n    \
-     hz_TextureMatrix = mat4[8](mat4(1.0), hz_light, hz_light, mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0));\n";
+const GBUFFERS_MATRICES: &str = "    pt_ModelViewMatrix = gbufferModelView;\n    \
+     pt_ProjectionMatrix = gbufferProjection;\n    \
+     pt_ModelViewProjectionMatrix = gbufferProjection * gbufferModelView;\n    \
+     pt_ModelViewMatrixInverse = gbufferModelViewInverse;\n    \
+     pt_ProjectionMatrixInverse = gbufferProjectionInverse;\n    \
+     pt_NormalMatrix = mat3(gbufferModelView);\n    \
+     mat4 pt_light = mat4(vec4(1.0 / 256.0, 0.0, 0.0, 0.0), vec4(0.0, 1.0 / 256.0, 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0), vec4(1.0 / 32.0, 1.0 / 32.0, 0.0, 1.0));\n    \
+     pt_TextureMatrix = mat4[8](mat4(1.0), pt_light, pt_light, mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0), mat4(1.0));\n";
 
 fn translate(
     vertex: &Preprocessed,
@@ -271,7 +271,7 @@ fn translate(
             Some((global, parts)) => {
                 let mut copies = Vec::new();
                 for (k, (decl, access)) in parts.into_iter().enumerate() {
-                    let part = format!("hz_v_{}_{k}", var.name);
+                    let part = format!("pt_v_{}_{k}", var.name);
                     let next = locations.len() as u32;
                     locations.insert(part.clone(), (next, decl));
                     copies.push((part, access));
@@ -287,10 +287,10 @@ fn translate(
 
     let header = |stage: &Stage| {
         let mut h = String::from("#version 450\n");
-        h.push_str("layout(set = 0, binding = 0) uniform HzUniforms { vec4 hz_target; vec4 hz_fog_color; vec4 hz_fog;");
+        h.push_str("layout(set = 0, binding = 0) uniform PtUniforms { vec4 pt_target; vec4 pt_fog_color; vec4 pt_fog;");
         for (name, ty) in &uniforms {
             match ty.as_str() {
-                "bool" => write!(h, " int hz_bool_{name};"),
+                "bool" => write!(h, " int pt_bool_{name};"),
                 _ => match ty.split_once('[') {
                     Some((base, size)) => write!(h, " {base} {name}[{size};"),
                     None => write!(h, " {ty} {name};"),
@@ -301,15 +301,15 @@ fn translate(
         h.push_str(" };\n");
         if draw {
             h.push_str(
-                "layout(set = 2, binding = 0) uniform HzDraw { int renderStage; int entityId; \
-                 int blockEntityId; int hz_draw_pad; vec4 entityColor; };\n",
+                "layout(set = 2, binding = 0) uniform PtDraw { int renderStage; int entityId; \
+                 int blockEntityId; int pt_draw_pad; vec4 entityColor; };\n",
             );
         }
         for s in &samplers {
             let (texture, sampler) = split_sampler(&s.ty);
             writeln!(
                 h,
-                "layout(set = 0, binding = {}) uniform {texture} {}; layout(set = 0, binding = {}) uniform {sampler} hz_s_{};",
+                "layout(set = 0, binding = {}) uniform {texture} {}; layout(set = 0, binding = {}) uniform {sampler} pt_s_{};",
                 s.binding, s.name, s.binding + 1, s.name
             )
             .unwrap();
@@ -339,12 +339,12 @@ fn translate(
     };
     let flip = if target == Target::Buffers { "-" } else { "" };
     let fog =
-        "    hz_Fog = hz_FogParameters(hz_fog_color, hz_fog.x, hz_fog.y, hz_fog.z, hz_fog.w);\n";
+        "    pt_Fog = pt_FogParameters(pt_fog_color, pt_fog.x, pt_fog.y, pt_fog.z, pt_fog.w);\n";
     let mut vertex_main = String::from("\nvoid main() {\n");
     match gbuffers {
         None => vertex_main.push_str(
-            "    vec2 hz_p = hz_quad[gl_VertexIndex];\n    hz_Vertex = vec4(hz_p, 0.0, 1.0);\n    \
-             hz_MultiTexCoord0 = hz_Vertex;\n    hz_Color = vec4(1.0);\n    hz_Normal = vec3(0.0, 0.0, 1.0);\n",
+            "    vec2 pt_p = pt_quad[gl_VertexIndex];\n    pt_Vertex = vec4(pt_p, 0.0, 1.0);\n    \
+             pt_MultiTexCoord0 = pt_Vertex;\n    pt_Color = vec4(1.0);\n    pt_Normal = vec3(0.0, 0.0, 1.0);\n",
         ),
         Some(inputs) => {
             vertex_main.push_str(&matrices);
@@ -365,9 +365,9 @@ fn translate(
     }
     vertex_main.push_str(fog);
     for name in &v.inits {
-        writeln!(vertex_main, "    {name} = hz_init_{name}();").unwrap();
+        writeln!(vertex_main, "    {name} = pt_init_{name}();").unwrap();
     }
-    vertex_main.push_str("    hz_main();\n");
+    vertex_main.push_str("    pt_main();\n");
     for (name, (_, copies)) in &split {
         for (part, access) in copies {
             writeln!(vertex_main, "    {part} = {name}{access};").unwrap();
@@ -386,8 +386,8 @@ fn translate(
     fragment_main.push_str(fog);
     if f.frag_coord {
         fragment_main.push_str(match target {
-            Target::Window => "    hz_FragCoord = vec4(gl_FragCoord.x, hz_target.y - gl_FragCoord.y, gl_FragCoord.zw);\n",
-            Target::Buffers => "    hz_FragCoord = gl_FragCoord;\n",
+            Target::Window => "    pt_FragCoord = vec4(gl_FragCoord.x, pt_target.y - gl_FragCoord.y, gl_FragCoord.zw);\n",
+            Target::Buffers => "    pt_FragCoord = gl_FragCoord;\n",
         });
     }
     for (name, (_, copies)) in &split {
@@ -396,9 +396,9 @@ fn translate(
         }
     }
     for name in &f.inits {
-        writeln!(fragment_main, "    {name} = hz_init_{name}();").unwrap();
+        writeln!(fragment_main, "    {name} = pt_init_{name}();").unwrap();
     }
-    fragment_main.push_str("    hz_main();\n");
+    fragment_main.push_str("    pt_main();\n");
     // With `out` variables the pack tests alpha itself.
     if let Some(t) = gbuffers.and_then(|g| g.alpha_test)
         && f.outputs.contains(&0)
@@ -408,7 +408,7 @@ fn translate(
             "false" => fragment_main.push_str("    discard;\n"),
             op => writeln!(
                 fragment_main,
-                "    if (!(hz_out0.a {op} {:?})) {{ discard; }}",
+                "    if (!(pt_out0.a {op} {:?})) {{ discard; }}",
                 t.reference
             )
             .unwrap(),
@@ -440,10 +440,10 @@ fn translate(
         .into_iter()
         .filter_map(|(member, offset)| {
             let name = member
-                .strip_prefix("hz_bool_")
+                .strip_prefix("pt_bool_")
                 .unwrap_or(&member)
                 .to_owned();
-            let ty = if name.starts_with("hz_") {
+            let ty = if name.starts_with("pt_") {
                 "vec4".to_owned()
             } else {
                 uniforms.get(&name)?.clone()
@@ -589,7 +589,7 @@ fn block_layout(module: &naga::Module) -> (u32, Vec<(String, u32)>) {
             return (*span, offsets);
         }
     }
-    (16, vec![("hz_target".into(), 0)])
+    (16, vec![("pt_target".into(), 0)])
 }
 
 #[cfg(test)]
@@ -643,9 +643,9 @@ mod tests {
         assert_eq!(
             uniforms,
             [
-                ("hz_target", "vec4"),
-                ("hz_fog_color", "vec4"),
-                ("hz_fog", "vec4"),
+                ("pt_target", "vec4"),
+                ("pt_fog_color", "vec4"),
+                ("pt_fog", "vec4"),
                 ("frameCounter", "int"),
                 ("hideGUI", "bool"),
                 ("viewWidth", "float")
@@ -706,7 +706,7 @@ mod tests {
             let (handle, _) = m
                 .global_variables
                 .iter()
-                .find(|(_, g)| g.name.as_deref() == Some("hz_FragCoord"))
+                .find(|(_, g)| g.name.as_deref() == Some("pt_FragCoord"))
                 .unwrap();
             // naga calls our `main` from its entry point: look in every function.
             let functions = m.functions.iter().map(|(_, f)| f);
@@ -718,7 +718,7 @@ mod tests {
                     _ => false,
                 })
             });
-            assert!(stores, "{target:?}: main does not set hz_FragCoord");
+            assert!(stores, "{target:?}: main does not set pt_FragCoord");
         }
     }
 
@@ -738,7 +738,7 @@ mod tests {
             let pack = Pack::from_zip_bytes("P.zip", zip(&files)).unwrap();
             let m = Macros::standard();
             let inputs = GbuffersInputs {
-                body: "    hz_Vertex = vec4(0.0, 0.0, 0.0, 1.0);\n".into(),
+                body: "    pt_Vertex = vec4(0.0, 0.0, 0.0, 1.0);\n".into(),
                 ..Default::default()
             };
             translate_gbuffers(
@@ -775,7 +775,7 @@ mod tests {
             let pack = Pack::from_zip_bytes("P.zip", zip(&files)).unwrap();
             let m = Macros::standard();
             let inputs = GbuffersInputs {
-                body: "    hz_Vertex = vec4(0.0, 0.0, 0.0, 1.0);\n".into(),
+                body: "    pt_Vertex = vec4(0.0, 0.0, 0.0, 1.0);\n".into(),
                 alpha_test: AlphaTest::parse("GREATER 0.1").unwrap(),
                 ..Default::default()
             };
@@ -817,8 +817,8 @@ mod tests {
         let m = Macros::standard();
         let game = GbuffersInputs {
             declarations: "layout(location = 0) in vec3 game_pos;\nlayout(location = 1) in uvec2 game_uv;".into(),
-            body: "    hz_Vertex = vec4(game_pos, 1.0);\n    hz_MultiTexCoord0 = vec4(vec2(game_uv) / 32768.0, 0.0, 1.0);\n    \
-                   hz_MultiTexCoord1 = vec4(240.0, 240.0, 0.0, 1.0);\n    hz_Color = vec4(1.0);\n    hz_Normal = vec3(0.0, 1.0, 0.0);\n"
+            body: "    pt_Vertex = vec4(game_pos, 1.0);\n    pt_MultiTexCoord0 = vec4(vec2(game_uv) / 32768.0, 0.0, 1.0);\n    \
+                   pt_MultiTexCoord1 = vec4(240.0, 240.0, 0.0, 1.0);\n    pt_Color = vec4(1.0);\n    pt_Normal = vec3(0.0, 1.0, 0.0);\n"
                 .into(),
             attributes: vec![("mc_midTexCoord".into(), "vec2(game_uv) / 32768.0".into())],
             ..Default::default()

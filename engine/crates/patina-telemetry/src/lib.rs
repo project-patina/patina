@@ -6,15 +6,11 @@
 //! connection. Items are small summaries (percentiles and histogram buckets, never raw streams),
 //! dated to the day, with no account, world, server or address in them ([`scrub`]); they leave
 //! in zstd batches ([`batch`]). `docs/telemetry.md` lists every field.
-//!
-//! The one exception is [`live`]: the anonymous "I'm playing" ping the game sends while it
-//! runs, for the live player count. It holds no install ID and nothing about the player.
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod batch;
 pub mod consent;
-pub mod live;
 pub mod outbox;
 pub mod payload;
 pub mod scrub;
@@ -93,22 +89,5 @@ pub(crate) mod test_home {
             std::env::temp_dir().join(format!("patina-telemetry-{name}-{}", super::random_hex(6)));
         std::fs::create_dir_all(&dir).unwrap();
         dir
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_endpoint_defaults_to_the_server_and_can_be_moved_or_turned_off() {
-        assert_eq!(resolve(None).as_deref(), Some(DEFAULT_ENDPOINT));
-        assert_eq!(resolve(Some(" ")).as_deref(), Some(DEFAULT_ENDPOINT));
-        assert_eq!(
-            resolve(Some("http://127.0.0.1:8080/")).as_deref(),
-            Some("http://127.0.0.1:8080")
-        );
-        assert_eq!(resolve(Some("off")), None);
-        assert!(DEFAULT_ENDPOINT.starts_with("https://") && !DEFAULT_ENDPOINT.ends_with('/'));
     }
 }

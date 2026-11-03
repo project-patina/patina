@@ -1,9 +1,12 @@
 <script lang="ts">
+  import Segmented from "./Segmented.svelte";
   import { api } from "../lib/api";
+  import { loaderLabel } from "../lib/format";
+  import { t } from "../lib/i18n.svelte";
   import { ENGINE_MC, LOADERS } from "../lib/presets";
   import type { Loader, LoaderVersion } from "../lib/types";
 
-  // Loader cards + loader version select for a given Minecraft version.
+  // Loader choice + loader version select for a given Minecraft version.
   // `auto = false` keeps a null loader version as "pick newest at launch".
   let {
     mc = $bindable(""),
@@ -25,6 +28,9 @@
     if (l === "vanilla" || l === "rust" || !v) {
       versions = [];
       loaderVersion = null;
+      // A request cut short here never reaches the `finally` below.
+      loading = false;
+      failed = false;
       return;
     }
     loading = true;
@@ -45,45 +51,34 @@
   });
 
   const plain = $derived(loader === "vanilla" || loader === "rust");
-  const unsupported = $derived(!plain && !loading && !failed && versions.length === 0);
+  const unsupported = $derived(!plain && !!mc && !loading && !failed && versions.length === 0);
+  // A Quilt or Vanilla instance keeps its loader until the player picks another one.
+  const offered = $derived(LOADERS.find((l) => l.id === loader));
+  const hint = $derived(offered ? offered.hint : t("loaderPicker.legacy", { loader: loaderLabel(loader) }));
+  const options = $derived(LOADERS.map((l) => ({ value: l.id, label: l.label })));
   $effect(() => {
     available = !unsupported && !loading;
   });
 </script>
 
-{#if minimal}
-  <div class="seg">
-    {#each LOADERS as l (l.id)}
-      <button class:on={loader === l.id} title={l.hint} onclick={() => (loader = l.id)}>{l.label}</button>
-    {/each}
-  </div>
-  {#if unsupported}<p class="warn small">{loader === "fabric" ? "Fabric" : "Quilt"} nie obsługuje jeszcze {mc}</p>{/if}
-{:else}
-  <div class="loaders">
-    {#each LOADERS as l (l.id)}
-      <button class="ld" class:on={loader === l.id} onclick={() => (loader = l.id)}>
-        <b>{l.label}</b>
-        <small>{l.hint}</small>
-      </button>
-    {/each}
-  </div>
-{/if}
-{#if minimal}
-  <!-- The rest is decided at launch. -->
-{:else if loader === "rust"}
-  <p class="note">Bez Javy i bez modów Fabric. Przy pierwszym uruchomieniu launcher przygotuje zasoby z Twojej kopii gry. Działają paczki zasobów.</p>
-{:else if !plain}
+<div class="choice">
+  <Segmented label={t("loaderPicker.title")} value={loader} {options} onchange={(v) => (loader = v)} />
+  <p class="hint">{hint}</p>
+  {#if unsupported}<p class="warn">{t("loaderPicker.unsupported", { loader: loaderLabel(loader), mc })}</p>{/if}
+</div>
+<!-- With `minimal` the rest is decided at launch. -->
+{#if !minimal && loader === "rust"}
+  <p class="hint">{t("loaderPicker.rustNote")}</p>
+{:else if !minimal && !plain && !unsupported}
   <div class="lv">
-    <span class="dim">Wersja loadera</span>
+    <span class="label">{t("loaderPicker.version")}</span>
     {#if loading}
-      <span class="dim">ładowanie…</span>
-    {:else if unsupported}
-      <span class="warn">{loader === "fabric" ? "Fabric" : "Quilt"} nie obsługuje jeszcze {mc}</span>
+      <span class="hint">{t("common.loading")}</span>
     {:else if failed}
-      <span class="warn">Nie udało się pobrać listy (zostanie wybrana automatycznie)</span>
+      <span class="warn">{t("loaderPicker.failed")}</span>
     {:else}
-      <select class="input sel" value={loaderVersion ?? ""} onchange={(e) => (loaderVersion = e.currentTarget.value || null)}>
-        {#if !auto}<option value="">Automatycznie (najnowsza)</option>{/if}
+      <select class="input sel" aria-label={t("loaderPicker.version")} value={loaderVersion ?? ""} onchange={(e) => (loaderVersion = e.currentTarget.value || null)}>
+        {#if !auto}<option value="">{t("loaderPicker.newest")}</option>{/if}
         {#each versions as v (v.version)}
           <option value={v.version}>{v.version}{v.stable ? "" : " (beta)"}</option>
         {/each}
@@ -93,83 +88,27 @@
 {/if}
 
 <style>
-  .seg {
+  .choice {
     display: flex;
-    gap: 2px;
-    padding: 3px;
-    margin-bottom: 10px;
-    border-radius: var(--radius);
-    background: var(--panel-2);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
-  .seg button {
-    flex: 1;
-    padding: 7px 4px;
-    border-radius: calc(var(--radius) - 3px);
-    font-size: 0.88rem;
-    font-weight: 560;
-    color: var(--text-3);
-    transition: background 0.16s, color 0.16s;
+  .hint, .warn {
+    margin: 0;
+    font-size: var(--fs-12);
+    line-height: 1.4;
   }
-  .seg button.on {
-    background: var(--panel-3);
-    color: var(--text);
-  }
-  .small {
-    margin: -4px 0 10px;
-    font-size: 0.84rem;
-  }
-  .loaders {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 8px;
-  }
-  .ld {
-    padding: 12px;
-    border-radius: var(--radius);
-    text-align: left;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    transition: border-color 0.18s, background 0.18s, transform 0.2s var(--ease);
-  }
-  .ld:hover {
-    border-color: var(--border-2);
-    transform: translateY(-1px);
-  }
-  .ld.on {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-  }
-  .ld b {
-    display: block;
-    font-weight: 650;
-  }
-  .ld small {
-    color: var(--text-3);
-    font-size: 0.78rem;
-    line-height: 1.35;
-    display: block;
-    margin-top: 3px;
-  }
+  .hint { color: var(--text-3); }
+  .warn { color: var(--warning); }
+  .choice + .hint { margin-top: 4px; }
   .lv {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-top: 10px;
-    font-size: 0.9rem;
-    min-height: 34px;
+    min-height: 32px;
+    margin-top: 8px;
   }
-  .sel {
-    width: 200px;
-    height: 34px;
-  }
-  .note {
-    margin-top: 10px;
-    color: var(--text-3);
-    font-size: 0.85rem;
-    line-height: 1.4;
-  }
-  .warn {
-    color: var(--warning);
-  }
+  .sel { width: 200px; }
 </style>
