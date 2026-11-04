@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.1 — 2026-11-04
+
+### Fixed
+
+- Rust client: preparing a fresh install failed with "is not a 26.3 version file Patina
+  knows" since Mojang republished 26.3's version file with a new asset index. A version
+  file of the pinned release (the same id, jars and Java, and only Mojang's own fields) is
+  now accepted whenever Mojang republishes it; a rewrite by another launcher is still
+  refused with what to do.
+
 ## 0.4.0 — 2026-11-03
 
 ### Added

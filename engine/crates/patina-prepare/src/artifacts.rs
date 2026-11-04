@@ -79,6 +79,49 @@ impl Lock {
             || self.listed("accepted_manifest_sha1", checksum)
     }
 
+    /// A version JSON of the pinned release that Mojang republished after this lock was
+    /// written: the same id, jars and Java, and only the fields Mojang's own version files
+    /// have. Mojang republishes for asset-index changes (non-English translations), which
+    /// leave the jars and libraries alone; another launcher's rewrite adds fields of its own
+    /// (HMCL and PCL, #1772) and is not one.
+    fn republished(&self, manifest: &Value) -> bool {
+        const MOJANG_FIELDS: [&str; 14] = [
+            "arguments",
+            "assetIndex",
+            "assets",
+            "complianceLevel",
+            "downloads",
+            "id",
+            "javaVersion",
+            "libraries",
+            "logging",
+            "mainClass",
+            "minimumLauncherVersion",
+            "releaseTime",
+            "time",
+            "type",
+        ];
+        let Some(fields) = manifest.as_object() else {
+            return false;
+        };
+        let sha1 = |side: &str| {
+            manifest
+                .get("downloads")
+                .and_then(|d| d.get(side))
+                .and_then(|d| d.get("sha1"))
+                .and_then(Value::as_str)
+        };
+        let java = manifest
+            .get("javaVersion")
+            .and_then(|j| j.get("majorVersion"))
+            .and_then(Value::as_i64);
+        fields.iter().all(|(key, _)| MOJANG_FIELDS.contains(&key.as_str()))
+            && manifest.get("id").and_then(Value::as_str) == Some(self.version.as_str())
+            && sha1("client").is_some_and(|s| self.pin("client_sha1").is_ok_and(|p| p == s))
+            && sha1("server").is_some_and(|s| self.pin("server_sha1").is_ok_and(|p| p == s))
+            && java == Some(self.java_major)
+    }
+
     /// The asset indexes of those republished version JSONs: a launcher keeps one
     /// `indexes/<id>.json`, the last it downloaded, whichever version JSON it reads.
     pub(crate) fn asset_index_accepted(&self, checksum: &str) -> bool {
@@ -308,15 +351,15 @@ pub(crate) fn import_manifest(lock: &Lock, files: &GameFiles) -> Result<Value, S
             ));
         }
         let checksum = digest(source, "sha1")?;
-        if !lock.manifest_accepted(&checksum) {
+        if !lock.manifest_accepted(&checksum) && !lock.republished(&manifest) {
             // Another launcher's rewrite of Mojang's file (HMCL and PCL add their own fields to
             // the same jars, #1772), or one Mojang republished: Mojang's own copy saved as the
             // imported one is used instead.
             let pinned = lock.pin("manifest_sha1")?;
             if !(destination.exists() && lock.manifest_accepted(&digest(&destination, "sha1")?)) {
                 return Err(format!(
-                    "{} is not a {version} version file Patina knows (sha1 {checksum}): your \
-                     launcher may have rewritten it, or Mojang republished it. Prepare from the \
+                    "{} is not Mojang's {version} version file (sha1 {checksum}): your \
+                     launcher may have rewritten it with fields of its own. Prepare from the \
                      Patina launcher, which downloads Mojang's own, or save \
                      https://piston-meta.mojang.com/v1/packages/{pinned}/{version}.json as {} \
                      and prepare again.",
@@ -328,7 +371,10 @@ pub(crate) fn import_manifest(lock: &Lock, files: &GameFiles) -> Result<Value, S
             fs::create_dir_all(&lock.directory).map_err(|e| e.to_string())?;
             fs::copy(source, &destination).map_err(|e| e.to_string())?;
         }
-    } else if !(destination.exists() && lock.manifest_accepted(&digest(&destination, "sha1")?)) {
+    } else if !(destination.exists()
+        && (lock.manifest_accepted(&digest(&destination, "sha1")?)
+            || lock.republished(&read_json(&destination)?)))
+    {
         return Err(format!(
             "Missing {}. {}",
             source.display(),
@@ -875,10 +921,10 @@ pub fn verify(lock: &Lock) -> Result<Artifacts, String> {
             manifest_path.display()
         ));
     }
-    if !lock.manifest_accepted(&digest(&manifest_path, "sha1")?) {
+    let manifest = read_json(&manifest_path)?;
+    if !lock.manifest_accepted(&digest(&manifest_path, "sha1")?) && !lock.republished(&manifest) {
         return Err("Manifest checksum changed; prepare again with --prepare".into());
     }
-    let manifest = read_json(&manifest_path)?;
     let id = manifest.get("id").and_then(Value::as_str).unwrap_or("");
     if id != lock.version {
         return Err("Manifest version differs from the lock".into());
@@ -1266,6 +1312,43 @@ mod tests {
     /// scanfee's Prism Launcher 26.3 install on a Mac (#1487): Prism keeps natives under its own
     /// names and never downloads Netty's native transport, which the game runs without. Preparing
     /// still checks every other library, and the transport whenever the launcher has it.
+    /// Mojang republished 26.3's version file for a new asset index after the lock was
+    /// written (sha1 80608ff…): a fresh launcher downloads that one, and it prepares, from
+    /// the launcher's copy and again from the imported one.
+    #[test]
+    fn a_version_file_mojang_republished_prepares() {
+        let root = std::env::temp_dir().join(format!("patina-republished-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let pinned = r#"{"id":"9.9","type":"release","javaVersion":{"majorVersion":25},"assetIndex":{"id":"34","sha1":"a"},"downloads":{"client":{"sha1":"c"},"server":{"sha1":"s"}}}"#;
+        let republished = r#"{"id":"9.9","type":"release","javaVersion":{"majorVersion":25},"assetIndex":{"id":"34","sha1":"b"},"downloads":{"client":{"sha1":"c"},"server":{"sha1":"s"}}}"#;
+        let minecraft = root.join("minecraft");
+        fs::create_dir_all(minecraft.join("versions/9.9")).unwrap();
+        fs::write(minecraft.join("versions/9.9/9.9.json"), republished).unwrap();
+        fs::write(root.join("pinned.json"), pinned).unwrap();
+        let sha1 = digest(&root.join("pinned.json"), "sha1").unwrap();
+        fs::write(
+            root.join("research-lock.json"),
+            format!(
+                r#"{{"minecraft":{{"version":"9.9","java_major":25,"manifest_sha1":"{sha1}","client_sha1":"c","server_sha1":"s"}}}}"#
+            ),
+        )
+        .unwrap();
+        let lock = Lock::read(&root).unwrap();
+        let files = game_files(Some(&minecraft), "9.9");
+        let manifest = import_manifest(&lock, &files).unwrap();
+        let index = manifest.get("assetIndex").and_then(|i| i.get("sha1"));
+        assert_eq!(index.and_then(Value::as_str), Some("b"));
+        let destination = lock.directory.join("manifest.json");
+        assert_eq!(fs::read_to_string(&destination).unwrap(), republished);
+        // Without the launcher's copy the imported one is enough.
+        fs::remove_dir_all(&minecraft).unwrap();
+        assert!(import_manifest(&lock, &game_files(Some(&minecraft), "9.9")).is_ok());
+        // Other jars are another release, whatever the file looks like.
+        let other = republished.replace(r#""sha1":"c""#, r#""sha1":"x""#);
+        assert!(!lock.republished(&pyjson::loads(&other).unwrap()));
+        fs::remove_dir_all(&root).unwrap();
+    }
+
     #[test]
     fn a_prism_install_without_netty_natives_prepares() {
         let fixture = Imports::new();
@@ -1429,9 +1512,16 @@ mod tests {
             .unwrap_err()
             .contains("is not the pinned file"));
         put("libraries/net/minecraft/client/9.9/client-9.9.jar", &client);
+        // Laid out anew, the same version file is still the pinned release.
         put(
             "configs/json/minecraft/9.9.json",
             manifest.replace(',', ", ").as_bytes(),
+        );
+        prepare(&atlauncher).unwrap();
+        // A field of the launcher's own makes it a rewrite.
+        put(
+            "configs/json/minecraft/9.9.json",
+            manifest.replacen('{', r#"{"inheritsFrom": "9.8", "#, 1).as_bytes(),
         );
         assert!(prepare(&atlauncher)
             .unwrap_err()
