@@ -25,7 +25,7 @@ let settings: Settings = {
   followCursor: true, showNametag: true,
   showSnapshots: false, showOldVersions: false, defaultLoader: "fabric", installPerformanceMods: true, memoryMinMb: 1024,
   memoryMaxMb: 6144, javaPath: "", jvmArgs: "", optimizedJvmArgs: true, gameWidth: 1280, gameHeight: 720, fullscreen: false,
-  onLaunch: "keep", reopenOnExit: true, openConsoleOnLaunch: false, maxConcurrentDownloads: 16, gamemode: false, mangohud: false,
+  onLaunch: "keep", reopenOnExit: true, openConsoleOnLaunch: false, maxConcurrentDownloads: 16, discordPresence: true, discordShowServer: true, gamemode: false, mangohud: false,
   discreteGpu: false, envVars: "", wrapperCommand: "", preLaunchCommand: "", postExitCommand: "",
   rustEngine: { lodDistance: null, resolutionScale: null, antialiasing: "game", graphicsApi: "game", hdr: null, batteryMode: null, fpsOverlay: null, xwayland: true },
   language: params.get("lang") ?? "", brandVersion: 1,
@@ -210,6 +210,7 @@ export function installDevMock() {
         }
         case "running": return [];
         case "game_log": return [];
+        case "presence_page": return null;
         default:
           if (cmd.startsWith("plugin:event|")) return null;
           console.warn("devmock: unhandled", cmd, args);

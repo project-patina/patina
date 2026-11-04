@@ -57,6 +57,10 @@ pub struct Settings {
     pub reopen_on_exit: bool,
     pub open_console_on_launch: bool,
     pub max_concurrent_downloads: u32,
+    /// Show what the player does as their Discord activity.
+    pub discord_presence: bool,
+    /// Name the server in that activity (never a bare IP address).
+    pub discord_show_server: bool,
 
     // Linux / advanced
     pub gamemode: bool,
@@ -111,6 +115,8 @@ impl Default for Settings {
             reopen_on_exit: true,
             open_console_on_launch: false,
             max_concurrent_downloads: 16,
+            discord_presence: true,
+            discord_show_server: true,
             gamemode: false,
             mangohud: false,
             discrete_gpu: false,

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.3 — 2026-11-04
+
+### Added
+
+- Discord activity: Discord shows "Playing Patina" with what the player is doing. In the
+  launcher, the page (home, servers, mods, skins, settings) or "Idle" after five minutes
+  without input; in game, the Minecraft version and the main menu, a single player world
+  or the server's name. Both clients report where the player is on their output, the same
+  lines from Fabric and Rust, and only the launcher talks to the Discord app, through its
+  local socket. Settings → General → Discord turns it off or hides the server; an IP
+  address is never shown.
+
+### Fixed
+
+- Updating the launcher on Windows failed with "Disk error: Access is denied (os error 5)"
+  and left the old version in place. Each copied file was flushed through a read-only
+  handle, which Windows refuses; it is now flushed through a writable one. Renames and
+  removals are tried again for a few seconds while an antivirus or the search indexer
+  still holds a fresh file, a disk error names the file, and the running launcher is
+  swapped like the other files, so a failure puts it back as well. Windows installs of
+  0.4.2 and older need to download 0.4.3 by hand once.
+
 ## 0.4.2 — 2026-11-04
 
 ### Fixed

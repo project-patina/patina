@@ -55,14 +55,17 @@ pub fn set_language(language: String) -> Result<()> {
 }
 
 #[tauri::command]
-pub fn save_settings(state: State<'_, AppState>, settings: Settings) -> Result<Settings> {
+pub fn save_settings(app: tauri::AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<Settings> {
     let s = settings.sanitized();
-    let mut current = state.settings.write().unwrap();
-    s.save(&state.ctx)?;
-    *current = s.clone();
+    {
+        let mut current = state.settings.write().unwrap();
+        s.save(&state.ctx)?;
+        *current = s.clone();
+    }
     if !s.language.is_empty() {
         lang::set(&s.language);
     }
+    crate::presence::refresh(&app);
     Ok(s)
 }
 

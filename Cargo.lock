@@ -34,7 +34,7 @@ dependencies = [
 
 [[package]]
 name = "amethyst-core"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -47,7 +47,6 @@ dependencies = [
  "minisign",
  "minisign-verify",
  "reqwest",
- "self-replace",
  "semver",
  "serde",
  "serde_json",
@@ -64,7 +63,7 @@ dependencies = [
 
 [[package]]
 name = "amethyst-launcher"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "amethyst-core",
  "chrono",
@@ -3719,17 +3718,6 @@ dependencies = [
  "rustc-hash",
  "servo_arc",
  "smallvec",
-]
-
-[[package]]
-name = "self-replace"
-version = "1.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "609c5606d9d357b26e4ee1a7a01beac396628d0fa01ebbade2a09cefb88e65af"
-dependencies = [
- "fastrand",
- "tempfile",
- "windows-sys 0.61.2",
 ]
 
 [[package]]

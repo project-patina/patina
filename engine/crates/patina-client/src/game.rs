@@ -187,6 +187,7 @@ mod postprocess;
 mod potent_sulfur;
 mod potions;
 mod powder_snow;
+mod presence;
 mod pumpkin;
 mod raids;
 mod recipe_book;
@@ -2104,6 +2105,8 @@ struct Game<'a> {
     persist: persist::EntityMemory,
     /// Connected to a server: the world comes from the network (game/remote.rs).
     remote: Option<remote::Remote>,
+    /// The last activity told to the launcher (game/presence.rs).
+    presence: Option<String>,
     /// This world is open to the network (game/lan.rs).
     lan: Option<lan::LanHost>,
     /// Single player's server thread, which `remote` is connected to.
@@ -14490,6 +14493,7 @@ impl ApplicationHandler for Game<'_> {
                     }
                     let updated = Instant::now();
                     self.track_toggle_screens();
+                    self.report_presence();
                     // For the "I'm playing" ping: an atomic, sent on when it changes.
                     let steps = self.clock.advance(elapsed);
                     // The world ticking in the frame: once its ticks took a
@@ -15122,6 +15126,7 @@ impl<'a> Game<'a> {
             sky_darken_memo: Default::default(),
             persist: Default::default(),
             remote: None,
+            presence: None,
             lan: None,
             integrated: None,
             level_shapes: Default::default(),

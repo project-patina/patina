@@ -4,7 +4,8 @@
 //! and it pins the package's SHA-256 and size. A package is a zip with `launcher/`
 //! and `engine/` at the top. Files are swapped by rename with a backup beside
 //! each one, and the launcher itself goes last, so a failure at any step leaves
-//! the previous version whole.
+//! the previous version whole. The running launcher is renamed aside like any
+//! other file, which Windows allows, and its backup goes at the next start.
 
 use std::collections::HashMap;
 use std::fs;
@@ -367,7 +368,36 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(name)
 }
 
-fn remove_any(path: &Path) -> io::Result<()> {
+/// Names the file in an error: "Access is denied" alone says nothing about which one.
+fn at<T>(path: &Path, result: io::Result<T>) -> io::Result<T> {
+    result.map_err(|e| io::Error::new(e.kind(), format!("{e} ({})", path.display())))
+}
+
+/// Windows refuses to rename or delete a file an antivirus or the search indexer
+/// holds open, and they open every file just written. That passes in a moment.
+fn transient(error: &io::Error) -> bool {
+    cfg!(windows) && (error.kind() == io::ErrorKind::PermissionDenied || matches!(error.raw_os_error(), Some(32 | 33)))
+}
+
+/// `op` on `path`, tried again for about three seconds while Windows holds the file.
+fn patiently<T>(path: &Path, mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+    let mut wait = 50;
+    loop {
+        match op() {
+            Err(e) if wait <= 1600 && transient(&e) => {
+                std::thread::sleep(Duration::from_millis(wait));
+                wait *= 2;
+            }
+            result => return at(path, result),
+        }
+    }
+}
+
+fn rename(from: &Path, to: &Path) -> io::Result<()> {
+    patiently(from, || fs::rename(from, to))
+}
+
+fn remove_now(path: &Path) -> io::Result<()> {
     match fs::symlink_metadata(path) {
         Ok(meta) if meta.is_dir() => fs::remove_dir_all(path),
         Ok(_) => fs::remove_file(path),
@@ -376,17 +406,22 @@ fn remove_any(path: &Path) -> io::Result<()> {
     }
 }
 
+fn remove_any(path: &Path) -> io::Result<()> {
+    patiently(path, || remove_now(path))
+}
+
 fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
     if from.is_dir() {
-        fs::create_dir_all(to)?;
-        for entry in fs::read_dir(from)? {
-            let entry = entry?;
+        at(to, fs::create_dir_all(to))?;
+        for entry in at(from, fs::read_dir(from))? {
+            let entry = at(from, entry)?;
             copy_tree(&entry.path(), &to.join(entry.file_name()))?;
         }
         return Ok(());
     }
-    fs::copy(from, to)?;
-    fs::File::open(to)?.sync_all()
+    at(to, fs::copy(from, to))?;
+    // Windows flushes only a handle opened for writing; a read-only one is "Access is denied".
+    at(to, fs::OpenOptions::new().write(true).open(to).and_then(|f| f.sync_all()))
 }
 
 /// One replaced file or folder. The copy sits beside its destination first, so a
@@ -413,7 +448,7 @@ impl Swap {
 
     fn prepare(&self) -> io::Result<()> {
         if let Some(parent) = self.dest.parent() {
-            fs::create_dir_all(parent)?;
+            at(parent, fs::create_dir_all(parent))?;
         }
         remove_any(&self.fresh())?;
         remove_any(&self.old())?;
@@ -422,10 +457,10 @@ impl Swap {
 
     fn commit(&mut self) -> io::Result<()> {
         if fs::symlink_metadata(&self.dest).is_ok() {
-            fs::rename(&self.dest, self.old())?;
+            rename(&self.dest, &self.old())?;
             self.moved_aside = true;
         }
-        fs::rename(self.fresh(), &self.dest)?;
+        rename(&self.fresh(), &self.dest)?;
         self.placed = true;
         Ok(())
     }
@@ -435,7 +470,7 @@ impl Swap {
             remove_any(&self.dest)?;
         }
         if self.moved_aside {
-            fs::rename(self.old(), &self.dest)?;
+            rename(&self.old(), &self.dest)?;
         }
         remove_any(&self.fresh())
     }
@@ -492,7 +527,7 @@ fn apply(staged: &Path, targets: &Targets, replace_exe: impl FnOnce(&Path) -> io
             }
         }
     }
-    // Last: nothing after this can fail, and it cannot be undone from the running program.
+    // Last, so that a failure here is the only one the launcher's own swap has to undo.
     let outcome = outcome.and_then(|()| replace_exe(&new_exe));
     if let Err(error) = outcome {
         for swap in swaps.iter().rev() {
@@ -504,9 +539,27 @@ fn apply(staged: &Path, targets: &Targets, replace_exe: impl FnOnce(&Path) -> io
     }
     for swap in &swaps {
         // A loaded DLL on Windows stays until the next start cleans it up.
-        let _ = remove_any(&swap.old());
+        let _ = remove_now(&swap.old());
     }
     progress(UpdateProgress { stage: "install", done: total, total });
+    Ok(())
+}
+
+/// Puts `new` where the running launcher `exe` is. Both Windows and Unix let a
+/// running program be renamed; the backup is removed now if the system allows,
+/// else by `clean_stale` at the next start. A failure puts the old launcher back.
+fn replace_launcher(new: &Path, exe: &Path) -> io::Result<()> {
+    let mut swap = Swap::new(new.to_path_buf(), exe.to_path_buf());
+    swap.prepare()?;
+    #[cfg(unix)]
+    at(exe, fs::metadata(exe).and_then(|m| fs::set_permissions(swap.fresh(), m.permissions())))?;
+    if let Err(error) = swap.commit() {
+        if let Err(e) = swap.roll_back() {
+            log::error!("update rollback of {}: {e}", exe.display());
+        }
+        return Err(error);
+    }
+    let _ = remove_now(&swap.old());
     Ok(())
 }
 
@@ -533,7 +586,8 @@ async fn download_and_apply(source: &Source, package: &Package, work: &Path, tar
         let staged = work.join("staged");
         extract(&archive, &staged)?;
         progress(UpdateProgress { stage: "verify", done: 1, total: 1 });
-        apply(&staged, &targets, |new| self_replace::self_replace(new), &progress)
+        let exe = targets.exe.clone();
+        apply(&staged, &targets, |new| replace_launcher(new, &exe), &progress)
     })
     .await
     .map_err(|e| Error::msg(e.to_string()))?
@@ -548,12 +602,12 @@ fn sweep(dir: &Path, deep: bool) {
         if let Some(original) = name.strip_suffix(OLD_SUFFIX) {
             let original = dir.join(original);
             if original.exists() {
-                let _ = remove_any(&path);
+                let _ = remove_now(&path);
             } else {
                 let _ = fs::rename(&path, original);
             }
         } else if name.ends_with(NEW_SUFFIX) {
-            let _ = remove_any(&path);
+            let _ = remove_now(&path);
         } else if deep && name != ".local" && path.is_dir() {
             sweep(&path, true);
         }
@@ -905,6 +959,37 @@ pub(crate) mod tests {
         assert!(apply(&l.staged, &l.targets, |_| Ok(()), &no_progress).is_err());
         assert_untouched(&l);
         fs::remove_dir_all(l.dir).unwrap();
+    }
+
+    #[test]
+    fn the_launcher_is_replaced_in_place_with_its_permissions() {
+        let dir = temp();
+        let exe = dir.join("Patina");
+        write(&exe, "old exe");
+        write(&dir.join("staged/patina"), "new exe");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&exe, fs::Permissions::from_mode(0o755)).unwrap();
+            fs::set_permissions(dir.join("staged/patina"), fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        replace_launcher(&dir.join("staged/patina"), &exe).unwrap();
+        assert_eq!(read(&exe), "new exe");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(&exe).unwrap().permissions().mode() & 0o777, 0o755);
+        }
+        assert!(!with_suffix(&exe, NEW_SUFFIX).exists());
+        assert!(!with_suffix(&exe, OLD_SUFFIX).exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn disk_errors_name_the_file() {
+        let missing = temp().join("nowhere/file");
+        let error = copy_tree(&missing, &missing.with_extension("copy")).unwrap_err();
+        assert!(error.to_string().contains("nowhere"), "{error}");
     }
 
     #[test]

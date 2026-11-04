@@ -31,6 +31,7 @@ supported yet.
 - **Servers**: well-known servers with their region, players and ping, a search that
   checks any address, and one click to start an instance and join.
 - Mods, resource packs and shaders from Modrinth for compatible instances.
+- Discord activity: the launcher's page, or the game and the server you play on.
 - Six palettes, dark and light modes, Polish and English.
 - Signed self-updates for the portable packages.
 

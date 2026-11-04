@@ -40,6 +40,8 @@ export interface Settings {
   reopenOnExit: boolean;
   openConsoleOnLaunch: boolean;
   maxConcurrentDownloads: number;
+  discordPresence: boolean;
+  discordShowServer: boolean;
   gamemode: boolean;
   mangohud: boolean;
   discreteGpu: boolean;

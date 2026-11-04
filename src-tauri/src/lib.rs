@@ -3,6 +3,7 @@ mod content_cmds;
 mod game;
 mod login;
 mod media;
+mod presence;
 mod updates;
 
 // Check Tauri's actual mode: its CLI may enable the dependency feature directly.
@@ -117,9 +118,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .register_uri_scheme_protocol("media", |ctx, req| media::serve(&ctx.app_handle().state::<AppState>(), req.uri().path()))
         .manage(state)
+        .manage(presence::PresenceState::new())
         // Here and not earlier: a second instance has exited by now and cannot touch a running update.
         .setup(|app| {
             amethyst_core::update::clean_stale(&app.state::<AppState>().ctx);
+            presence::refresh(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -176,6 +179,7 @@ pub fn run() {
             game::cancel_install,
             game::running,
             game::game_log,
+            presence::presence_page,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Patina");

@@ -7,6 +7,7 @@ pub mod accounts;
 pub mod announcements;
 pub mod auth;
 pub mod content;
+pub mod discord;
 pub mod download;
 pub mod engine;
 pub mod error;

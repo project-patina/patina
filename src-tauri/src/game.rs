@@ -67,6 +67,7 @@ pub fn launch(app: AppHandle, state: State<'_, AppState>, id: String, join: Opti
         Instance::load(&state.ctx, &id)?;
         installs.insert(id.clone(), cancel.clone());
     }
+    crate::presence::preparing(&app, &id);
     state.logs.lock().unwrap().remove(&id);
     {
         let mut s = state.settings.write().unwrap();
@@ -81,6 +82,7 @@ pub fn launch(app: AppHandle, state: State<'_, AppState>, id: String, join: Opti
         let st = app.state::<AppState>();
         st.installs.lock().unwrap().remove(&id);
         st.running.lock().unwrap().remove(&id);
+        crate::presence::ended(&app, &id);
         match res {
             Ok(Some(exit)) => {
                 emit_state(&app, &id, if exit.crashed { "crashed" } else { "exited" }, None, exit.code);
@@ -198,6 +200,7 @@ async fn run_game(app: &AppHandle, id: &str, join: Option<String>, cancel: Cance
         installs.remove(id);
     }
     emit_state(app, id, "running", None, None);
+    crate::presence::started(app, id, &inst, started);
     if let Ok(mut fresh) = Instance::load(&ctx, id) {
         fresh.last_played = Some(started);
         let _ = fresh.save(&ctx);
@@ -222,6 +225,9 @@ async fn run_game(app: &AppHandle, id: &str, join: Option<String>, cancel: Cance
     let (a, gid) = (app.clone(), id.to_string());
     // The engine logs everything to stderr; only its crash report line is an error.
     launch::pipe_output(&mut child, spec.secrets.clone(), Arc::new(move |line, level| {
+        if crate::presence::reported(&a, &gid, &line) {
+            return;
+        }
         let error = if rust { line.contains("crash report saved") } else { level == "ERROR" || level == "FATAL" };
         log(&a, &gid, line, error)
     }));

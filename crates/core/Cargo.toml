@@ -28,7 +28,6 @@ libc = "0.2"
 sha2 = "0.11"
 semver = "1"
 minisign-verify = "0.3"
-self-replace = "1"
 
 [dev-dependencies]
 env_logger = "0.11"

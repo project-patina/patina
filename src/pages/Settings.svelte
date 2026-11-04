@@ -123,6 +123,12 @@
             <Row title={t("general.reopen")}><Toggle label={t("general.reopen")} checked={s.reopenOnExit} onchange={set("reopenOnExit")} /></Row>
             <Row title={t("general.console")}><Toggle label={t("general.console")} checked={s.openConsoleOnLaunch} onchange={set("openConsoleOnLaunch")} /></Row>
           </Group>
+          <Group title={t("general.discord")}>
+            <Row title={t("general.discordPresence")} desc={t("general.discordPresenceDesc")}><Toggle label={t("general.discordPresence")} checked={s.discordPresence} onchange={set("discordPresence")} /></Row>
+            {#if s.discordPresence}
+              <Row title={t("general.discordServer")} desc={t("general.discordServerDesc")}><Toggle label={t("general.discordServer")} checked={s.discordShowServer} onchange={set("discordShowServer")} /></Row>
+            {/if}
+          </Group>
           <Group title={t("general.downloads")}>
             <Row title={t("general.parallel")} desc={t("general.parallelDesc")}>
               <div class="range">

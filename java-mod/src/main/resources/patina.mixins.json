@@ -8,6 +8,7 @@
 		"GuiGraphicsExtractorMixin",
 		"HudMixin",
 		"LoadingOverlayMixin",
+		"MinecraftMixin",
 		"PanoramaMixin",
 		"PauseScreenMixin",
 		"TitleScreenMixin"

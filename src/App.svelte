@@ -53,6 +53,21 @@
     return () => { disposed = true; cleanup?.(); closeCleanup?.(); };
   });
 
+  // The Discord activity: the page shown, and "idle" after five minutes without input.
+  const IDLE_MS = 5 * 60 * 1000;
+  let idle = $state(false);
+  onMount(() => {
+    let last = Date.now();
+    const active = () => { last = Date.now(); if (idle) idle = false; };
+    const events = ["pointermove", "pointerdown", "keydown", "wheel"] as const;
+    for (const e of events) window.addEventListener(e, active, { passive: true });
+    const timer = setInterval(() => { if (!idle && Date.now() - last > IDLE_MS) idle = true; }, 15_000);
+    return () => { for (const e of events) window.removeEventListener(e, active); clearInterval(timer); };
+  });
+  $effect(() => {
+    void api.presencePage(app.page, idle).catch(() => {});
+  });
+
   // The boot screen lifts before anything update-related appears.
   $effect(() => {
     if (!booting && app.ready) return untrack(startUpdates);

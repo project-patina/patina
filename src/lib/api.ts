@@ -69,6 +69,7 @@ export const api = {
   cancelInstall: (id: string) => invoke<void>("cancel_install", { id }),
   running: () => invoke<RunningInfo[]>("running"),
   gameLog: (id: string) => invoke<LogLine[]>("game_log", { id }),
+  presencePage: (page: string, idle: boolean) => invoke<void>("presence_page", { page, idle }),
 };
 
 export const events = {
