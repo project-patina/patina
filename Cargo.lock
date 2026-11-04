@@ -34,7 +34,7 @@ dependencies = [
 
 [[package]]
 name = "amethyst-core"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "base64 0.23.1",
  "chrono",
@@ -64,7 +64,7 @@ dependencies = [
 
 [[package]]
 name = "amethyst-launcher"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "amethyst-core",
  "chrono",

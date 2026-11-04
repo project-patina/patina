@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.2 — 2026-11-04
+
+### Fixed
+
+- The update screen's animation drew skewed squares and dark seams between the blocks
+  (CSS 3D faces in WebKitGTK). It now plays the frames both game clients play while
+  loading, from the same sprite sheet, which `scripts/render-splash.mjs` also writes for
+  the launcher.
+
 ## 0.4.1 — 2026-11-04
 
 ### Fixed

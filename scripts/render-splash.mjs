@@ -1,4 +1,5 @@
-// Renders the loading animation of src/lib/blocks.ts into a sprite sheet for both game clients.
+// Renders the loading animation of src/lib/blocks.ts into a sprite sheet for both game clients and
+// the launcher's update screen, so all three show the same frames.
 // Run with: node --experimental-strip-types scripts/render-splash.mjs
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -7,7 +8,11 @@ import { join } from "node:path";
 import { blockTracks } from "../src/lib/blocks.ts";
 
 const COLUMNS = 8, FRAMES = 64, SIZE = 160, UNIT = SIZE / 7;
-const OUT = ["engine/crates/patina-theme/splash/patina-splash.png", "java-mod/src/main/resources/assets/patina/textures/gui/splash.png"];
+const OUT = [
+  "engine/crates/patina-theme/splash/patina-splash.png",
+  "java-mod/src/main/resources/assets/patina/textures/gui/splash.png",
+  "src/assets/patina-splash.png",
+];
 const COLOURS = [
   { top: "#e9a06c", left: "#c47a47", right: "#7c4526", hidden: "#7c4526" },
   { top: "#6fdcc3", left: "#3fb8a0", right: "#2a8c7c", hidden: "#2a8c7c" },
