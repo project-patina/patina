@@ -33,7 +33,7 @@ for (const track of blockTracks().tracks) {
     if (shade === "hidden") continue;
     const [n, u, v] = FACES[name];
     const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => view(apply(track.home, n.map((c, k) => c / 2 + (u[k] * a + v[k] * b) / 2))));
-    faces.push({ depth: corners.reduce((s, c) => s + c[2], 0) / 4, colour: COLOURS[track.layer][shade], corners });
+    faces.push({ depth: corners.reduce((s, c) => s + c[2], 0) / 4, layer: track.layer, colour: COLOURS[track.layer][shade], corners });
   }
 }
 faces.sort((a, b) => a.depth - b.depth);
@@ -42,14 +42,15 @@ const xs = faces.flatMap((f) => f.corners.map((c) => c[0])), ys = faces.flatMap(
 const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
 const scale = (SIZE - MARGIN * 2) / Math.max(maxX - minX, maxY - minY);
 const ox = SIZE / 2 - (minX + maxX) / 2 * scale, oy = SIZE / 2 - (minY + maxY) / 2 * scale;
-// The stroke in the face's own colour closes the hairlines between neighbouring blocks.
-const polygons = faces.map(({ colour, corners }) => {
+// The stroke in the face's own colour closes the hairlines between neighbouring blocks. The
+// layer class lets the launcher's opening (Boot.svelte) bring the two layers in one by one.
+const polygons = faces.map(({ layer, colour, corners }) => {
   const points = corners.map(([x, y]) => `${(ox + x * scale).toFixed(1)},${(oy + y * scale).toFixed(1)}`).join(" ");
-  return `  <polygon points="${points}" fill="${colour}" stroke="${colour}" stroke-width="1.5" stroke-linejoin="round"/>`;
+  return `  <polygon class="layer-${layer}" points="${points}" fill="${colour}" stroke="${colour}" stroke-width="1.5" stroke-linejoin="round"/>`;
 });
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SIZE} ${SIZE}">\n${polygons.join("\n")}\n</svg>\n`;
 
-for (const path of ["public/icon.svg", "site/assets/icon.svg"]) writeFileSync(path, svg);
+for (const path of ["public/icon.svg", "site/assets/icon.svg", "src/assets/logo.svg"]) writeFileSync(path, svg);
 const work = mkdtempSync(join(tmpdir(), "patina-logo-"));
 const png = (size, path) => execFileSync("rsvg-convert", ["-w", String(size), "-h", String(size), "public/icon.svg", "-o", path]);
 png(1024, join(work, "icon-1024.png"));
