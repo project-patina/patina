@@ -497,6 +497,16 @@ impl Game<'_> {
                 17.0,
                 0.25,
             );
+            if patina_client::client_settings::get().mods.horse_stats.enabled&&equine::is_equine(m.species()) {
+                let speed=m.movement_speed()*42.1578;
+                let mut velocity=m.attrs.jump_strength;let mut jump=0.0;
+                for _ in 0..100 {if velocity<=0.0{break;}jump+=velocity;velocity=(velocity-0.08)*0.98;}
+                let max=patina_client::mobs::finalize::max_health(m);
+                let lines=[format!("{} {:.0} / {:.0}",self.translate("patina.horse.health","Health"),m.health,max),format!("{} {speed:.2} m/s",self.translate("patina.horse.speed","Speed")),format!("{} {jump:.2}",self.translate("patina.horse.jump","Jump"))];
+                let width=lines.iter().map(|line|HudBatch::text_width(atlas,line)).fold(0.0,f32::max)+8.0;
+                let(x,y)=if ox>=width+6.0{(ox-width-6.0,oy)}else{(ox,(oy-39.0).max(4.0))};batch.fill(atlas,x,y,width,36.0,rgba(16,24,27,232));
+                for(i,line)in lines.iter().enumerate(){batch.text(atlas,line,x+4.0,y+4.0+i as f32*10.0,u32::MAX,true);}
+            }
         }
     }
     /// `extractEntityInInventoryFollowsMouse` for a mob: depth-sorted,

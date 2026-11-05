@@ -3728,6 +3728,7 @@ impl Renderer {
         // lightmap.fsh: per (block, sky) level.
         let brightness = |level: f32| level / (4.0 - 3.0 * level);
         let mut pixels = [0u8; 16 * 16 * 4];
+        let full_bright = crate::client_settings::get().mods.fullbright.enabled;
         for s in 0..16 {
             for b in 0..16 {
                 let block_level = b as f32 / 15.0;
@@ -3750,6 +3751,9 @@ impl Renderer {
                 let scaled = 1.0 - inverted.powi(4);
                 let not_gamma = color * (scaled / max);
                 color = color.lerp(not_gamma, gamma);
+                if full_bright {
+                    color = Vec3::ONE;
+                }
                 let i = (s * 16 + b) * 4;
                 pixels[i] = (color.x * 255.0) as u8;
                 pixels[i + 1] = (color.y * 255.0) as u8;

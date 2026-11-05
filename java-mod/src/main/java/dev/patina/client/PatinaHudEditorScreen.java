@@ -1,35 +1,34 @@
 package dev.patina.client;
 
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 /**
- * The HUD editor: the game at its real size, over the world when there is one and a stand-in
- * of it otherwise, with the mods drawn by the code that draws them in game, so where a mod is
- * let go is exactly where it shows. Drag a mod to move it; its corner or the wheel resizes it.
+ * Edits mods at their in-game size and position over a reference view of Minecraft.
+ * Drag to move a mod, or resize it with the wheel or its corner handle.
  */
 public final class PatinaHudEditorScreen extends Screen {
 	private static final int ACCENT = 0xFF000000 | PatinaClient.ACCENT;
 	private static final int GUIDE = 0x80000000 | PatinaClient.ACCENT;
 	private static final int HOVER_EDGE = 0x80FFFFFF;
 	private static final int HINT = 0xFF9FB0AC;
-	private static final int BUTTON_WIDTH = 100;
 	/** Half the side of the resize handle. */
 	private static final int HANDLE = 2;
 	private static final float SCALE_STEP = 0.1f;
 
-	private static final int[] FAR_HILLS = {62, 58, 58, 54, 54, 58, 62, 62, 66, 62, 58, 58, 62, 66, 66, 62};
-	private static final int[] NEAR_HILLS = {74, 74, 70, 70, 74, 78, 78, 74, 74, 70, 70, 74, 74, 78, 74, 74};
 
+	private static final int BACK_WIDTH = 52;
+	private static final int BUTTON_GAP = 6;
 	private final Screen parent;
+	private final PatinaConfig.Placed preview;
 	private final PatinaConfig config = PatinaConfig.get();
 	private PatinaConfig.Placed selected;
 	private PatinaConfig.Placed dragging;
@@ -38,27 +37,38 @@ public final class PatinaHudEditorScreen extends Screen {
 	private float grabY;
 
 	public PatinaHudEditorScreen(Screen parent) {
+		this(parent, null);
+	}
+
+	public PatinaHudEditorScreen(Screen parent, PatinaConfig.Placed preview) {
 		super(Component.literal("Patina HUD"));
 		this.parent = parent;
+		this.preview = preview;
+		this.selected = preview;
 	}
 
 	@Override
 	protected void init() {
-		int y = this.height / 2 - 10;
-		this.addRenderableWidget(Button.builder(PatinaLang.text("patina.editor.reset"), press -> {
+		int buttonX = (this.width - PatinaResetButton.WIDTH - BUTTON_GAP - BACK_WIDTH) / 2;
+		this.addRenderableWidget(new PatinaResetButton(buttonX, 20, press -> {
 			PatinaConfig.Mods defaults = new PatinaConfig.Mods();
 			List<PatinaConfig.Placed> mods = this.config.mods.all();
 			for (int i = 0; i < mods.size(); i++) {
 				mods.get(i).reset(defaults.all().get(i));
 			}
+			this.selected = null;
+			this.dragging = null;
+			this.setDragging(false);
 			this.config.save();
-		}).bounds(this.width / 2 - BUTTON_WIDTH - 2, y, BUTTON_WIDTH, 20).build());
-		this.addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, press -> this.onClose())
-			.bounds(this.width / 2 + 2, y, BUTTON_WIDTH, 20).build());
+		}));
+		this.addRenderableWidget(Button.builder(PatinaLang.text("patina.editor.back"), press -> this.onClose())
+			.bounds(buttonX + PatinaResetButton.WIDTH + BUTTON_GAP, 20, BACK_WIDTH, 15).build());
 	}
 
 	@Override
 	public void onClose() {
+		this.dragging = null;
+		this.setDragging(false);
 		this.config.save();
 		this.minecraft.gui.setScreen(this.parent);
 	}
@@ -69,12 +79,21 @@ public final class PatinaHudEditorScreen extends Screen {
 	}
 
 	private PatinaHud.View view() {
-		PatinaHud.View live = PatinaHud.liveView();
+		PatinaHud.View live = this.preview == null ? PatinaHud.liveView() : null;
 		return live != null ? live : PatinaHud.sampleView();
+	}
+
+	private boolean shown(PatinaConfig.Placed mod) {
+		return mod != null && (mod.enabled || mod == this.preview);
 	}
 
 	private PatinaHud.Box box(PatinaConfig.Placed mod) {
 		return PatinaHud.place(this.font, this.width, this.height, this.view(), this.config.mods, mod);
+	}
+
+	private PatinaHud.Box hitBox(PatinaConfig.Placed mod) {
+		PatinaHud.Box box = this.box(mod);
+		return mod == this.config.mods.armor ? PatinaHud.armorSlots(box, this.config.mods.armor) : box;
 	}
 
 	/** The topmost shown mod under the pointer. */
@@ -82,7 +101,7 @@ public final class PatinaHudEditorScreen extends Screen {
 		List<PatinaConfig.Placed> mods = this.config.mods.all();
 		for (int i = mods.size() - 1; i >= 0; i--) {
 			PatinaConfig.Placed mod = mods.get(i);
-			if (mod.enabled && this.box(mod).contains(mouseX, mouseY)) {
+			if (this.shown(mod) && this.hitBox(mod).contains(mouseX, mouseY)) {
 				return mod;
 			}
 		}
@@ -90,19 +109,24 @@ public final class PatinaHudEditorScreen extends Screen {
 	}
 
 	private boolean onHandle(double mouseX, double mouseY) {
-		if (this.selected == null || !this.selected.enabled) {
+		if (!this.shown(this.selected)) {
 			return false;
 		}
-		PatinaHud.Box box = this.box(this.selected);
+		PatinaHud.Box box = this.hitBox(this.selected);
 		return Math.abs(mouseX - (box.x() + box.width())) <= HANDLE + 1 && Math.abs(mouseY - (box.y() + box.height())) <= HANDLE + 1;
 	}
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-		if (event.button() == 0) {
+		// Controls remain clickable even when a HUD element has been placed over them.
+		if (super.mouseClicked(event, doubleClick)) {
+			return true;
+		}
+		if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
 			if (this.onHandle(event.x(), event.y())) {
 				this.dragging = this.selected;
 				this.resizing = true;
+				this.setDragging(true);
 				return true;
 			}
 			PatinaConfig.Placed mod = this.modAt(event.x(), event.y());
@@ -111,18 +135,20 @@ public final class PatinaHudEditorScreen extends Screen {
 				this.selected = mod;
 				this.dragging = mod;
 				this.resizing = false;
+				this.setFocused(null);
+				this.setDragging(true);
 				this.grabX = (float) event.x() - box.x();
 				this.grabY = (float) event.y() - box.y();
 				return true;
 			}
 			this.selected = null;
 		}
-		return super.mouseClicked(event, doubleClick);
+		return false;
 	}
 
 	@Override
 	public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
-		if (this.dragging == null) {
+		if (this.dragging == null || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
 			return super.mouseDragged(event, dx, dy);
 		}
 		PatinaConfig.Placed mod = this.dragging;
@@ -131,7 +157,10 @@ public final class PatinaHudEditorScreen extends Screen {
 		float x = (float) event.x();
 		float y = (float) event.y();
 		if (this.resizing) {
-			this.resize(mod, box, Math.max((x - box.x()) / size[0], (y - box.y()) / size[1]));
+			PatinaHud.Box slots = this.hitBox(mod);
+			float right = (slots.x() + slots.width() - box.x()) / mod.scale;
+			float bottom = (slots.y() + slots.height() - box.y()) / mod.scale;
+			this.resize(mod, box, Math.max((x - box.x()) / right, (y - box.y()) / bottom));
 		} else {
 			float w = size[0] * mod.scale;
 			float h = size[1] * mod.scale;
@@ -155,8 +184,9 @@ public final class PatinaHudEditorScreen extends Screen {
 
 	@Override
 	public boolean mouseReleased(MouseButtonEvent event) {
-		if (this.dragging != null) {
+		if (this.dragging != null && event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
 			this.dragging = null;
+			this.setDragging(false);
 			this.config.save();
 			return true;
 		}
@@ -175,23 +205,21 @@ public final class PatinaHudEditorScreen extends Screen {
 		return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
 	}
 
-	/** Over a world the world itself shows; without one, a stand-in of the game. */
 	@Override
 	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
-		if (this.minecraft.level == null) {
-			drawScene(graphics, this.width, this.height);
-		}
+		drawScene(graphics, this.width, this.height);
 	}
 
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float a) {
-		super.extractRenderState(graphics, mouseX, mouseY, a);
 		String hint = PatinaLang.get("patina.editor.hint");
-		graphics.text(this.font, hint, (this.width - this.font.width(hint)) / 2, this.height / 2 + 14, HINT);
+		int hintX = (this.width - this.font.width(hint)) / 2;
+		graphics.fill(hintX - 5, 4, this.width - hintX + 5, 17, 0xD011181B);
+		graphics.text(this.font, hint, hintX, 7, 0xFFE9F3F0);
 		PatinaHud.View view = this.view();
 		PatinaConfig.Mods mods = this.config.mods;
 		for (PatinaConfig.Placed mod : mods.all()) {
-			if (mod.enabled) {
+			if (this.shown(mod)) {
 				PatinaHud.draw(graphics, this.font, view, mods, mod, this.box(mod), 1f);
 			}
 		}
@@ -205,11 +233,11 @@ public final class PatinaHudEditorScreen extends Screen {
 		}
 		PatinaConfig.Placed hovered = this.dragging != null ? this.dragging : this.modAt(mouseX, mouseY);
 		if (hovered != null && hovered != this.selected) {
-			this.frame(graphics, this.box(hovered), HOVER_EDGE, false);
+			this.frame(graphics, this.hitBox(hovered), HOVER_EDGE, false);
 		}
-		if (this.selected != null && this.selected.enabled) {
+		if (this.shown(this.selected)) {
 			PatinaHud.Box box = this.box(this.selected);
-			this.frame(graphics, box, ACCENT, true);
+			this.frame(graphics, this.hitBox(this.selected), ACCENT, true);
 			String size = Math.round(this.selected.scale * 100f) + "%";
 			int y = box.y() >= 11 ? (int) Math.floor(box.y()) - 11 : (int) Math.ceil(box.y() + box.height()) + 3;
 			graphics.text(this.font, size, (int) Math.floor(box.x()), y, HINT);
@@ -219,6 +247,8 @@ public final class PatinaHudEditorScreen extends Screen {
 		} else if (hovered != null) {
 			graphics.requestCursor(CursorTypes.RESIZE_ALL);
 		}
+		// Draw controls last so the buttons stay visible above movable HUD elements.
+		super.extractRenderState(graphics, mouseX, mouseY, a);
 	}
 
 	/** A mod's outline, with the resize handle on the selected one. */
@@ -237,16 +267,9 @@ public final class PatinaHudEditorScreen extends Screen {
 		return Identifier.withDefaultNamespace(path);
 	}
 
-	/**
-	 * A stand-in for the game at its real size: sky, hills and ground, and the HUD where the
-	 * game puts it (crosshair, hotbar, hearts, food and the experience bar).
-	 */
+	/** The photo and a vanilla-size reference HUD, used by the HUD editor. */
 	private static void drawScene(GuiGraphicsExtractor graphics, int width, int height) {
-		graphics.fillGradient(0, 0, width, height * 3 / 4, 0xFF7FB2DA, 0xFFC4E0EC);
-		hills(graphics, width, height, FAR_HILLS, 0xFF7DA689);
-		hills(graphics, width, height, NEAR_HILLS, 0xFF4F8A45);
-		graphics.fill(0, height * 84 / 100, width, height, 0xFF6B4A32);
-		graphics.fill(0, height * 84 / 100, width, height * 84 / 100 + 3, 0xFF5E9A50);
+		PatinaBackground.drawHudScene(graphics, 0, 0, width, height);
 
 		graphics.blitSprite(RenderPipelines.GUI_TEXTURED, sprite("hud/crosshair"), (width - 15) / 2, (height - 15) / 2, 15, 15);
 		int bar = width / 2 - 91;
@@ -263,12 +286,4 @@ public final class PatinaHudEditorScreen extends Screen {
 		}
 	}
 
-	private static void hills(GuiGraphicsExtractor graphics, int width, int height, int[] tops, int color) {
-		int columns = tops.length;
-		for (int i = 0; i < columns; i++) {
-			int left = width * i / columns;
-			int right = width * (i + 1) / columns;
-			graphics.fill(left, height * tops[i] / 100, right, height, color);
-		}
-	}
 }

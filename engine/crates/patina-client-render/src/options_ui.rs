@@ -2653,9 +2653,8 @@ impl OptionsUi {
     }
     /// Escape or Done: leave the current page, applying page results.
     pub fn back(&mut self, s: &mut Settings) -> Vec<Event> {
-        // Escape in the HUD editor goes back to the Patina Client panel.
-        if self.page() == Page::Client && self.client.editing() {
-            self.client.leave_editor();
+        // Escape closes the FPS dialog or HUD editor before the catalogue.
+        if self.page() == Page::Client && self.client.close_subpage() {
             return Vec::new();
         }
         let mut events = Vec::new();
@@ -2710,6 +2709,9 @@ impl OptionsUi {
             p.type_text(&crate::screen_draw::Measure(&atlas.font), text);
             return;
         }
+        if self.page() == Page::Client && let Some(search) = self.client.search_mut() {
+            search.insert_text(text);
+        }
         if self.page() == Page::Language {
             self.language_search.insert_text(text);
             self.scroll = 0.0;
@@ -2731,6 +2733,10 @@ impl OptionsUi {
         {
             let m = crate::screen_draw::Measure(&atlas.font);
             return p.shortcut(&m, shortcut, clipboard);
+        }
+        if self.page() == Page::Client && let Some(search) = self.client.search_mut() {
+            search.shortcut(shortcut, clipboard);
+            return true;
         }
         if self.page() == Page::Language {
             if self.language_search.shortcut(shortcut, clipboard) {
@@ -2765,6 +2771,7 @@ impl OptionsUi {
         text: Option<&str>,
     ) -> Vec<Event> {
         use winit::keyboard::KeyCode as K;
+        if self.page() == Page::Client && self.client.bind_key(key) { return vec![Event::ButtonClick]; }
         if self.resource_error.is_some() {
             if matches!(key, K::Escape | K::Enter | K::NumpadEnter) {
                 self.resource_error = None;
@@ -2808,6 +2815,11 @@ impl OptionsUi {
         }
         if key == K::Escape {
             return self.back(s);
+        }
+        if self.page() == Page::Client && let Some(search) = self.client.search_mut() {
+            if !search.key(key, false, false) && let Some(text) = text {
+                search.insert_text(text);
+            }
         }
         if self.page() == Page::Language {
             if !self.language_search.key(key, false, false)

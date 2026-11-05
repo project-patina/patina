@@ -33,6 +33,20 @@ their package licenses. This notice highlights bundled artwork and vendored code
 it is not a complete dependency bill of materials. Binary-release maintainers
 must review licenses for the dependencies included in their selected build.
 
+## Mods bundled in the Fabric client
+
+The Patina Client jar carries two mods from Modrinth, unmodified, as nested jars.
+`scripts/build-java-mod.sh` downloads them, pinned by SHA-256; they are not in the repository.
+
+| Component | License |
+| --- | --- |
+| [AppleSkin](https://github.com/squeek502/AppleSkin) 3.0.10+mc26.3, by squeek502 | The Unlicense |
+| [Fabric API](https://github.com/FabricMC/fabric) 0.165.2+26.3, by FabricMC | Apache License 2.0 |
+
+The Rust client draws AppleSkin's overlays from its icon sheet,
+[engine/crates/patina-client-render/assets/appleskin-icons.png](engine/crates/patina-client-render/assets/appleskin-icons.png)
+([its license](engine/crates/patina-client-render/assets/LICENSE-AppleSkin.txt)).
+
 ## Gradle wrapper
 
 `java-mod/gradlew`, `gradlew.bat` and `gradle/wrapper/gradle-wrapper.jar` come from

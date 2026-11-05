@@ -91,6 +91,8 @@ pub const MAX_ATLAS_SIZE: u32 = 16384;
 pub const MAP_SLOTS: usize = 256;
 /// The atlas slot the minimap extra draws into.
 pub const MINIMAP_SPRITE: &str = "patina/minimap";
+pub const MENU_BACKDROP_SPRITE: &str = "patina/menu_backdrop";
+pub(crate) const HUD_BACKDROP_SPRITE: &str = "patina/hud_backdrop";
 /// Atlas slots for downloaded player skins (`skins/<sha1>`), 64x64 each.
 /// Vanilla registers a texture per skin. Here the slots are shared
 /// (`skins::SkinSlots`): skins drawn in the last frame keep theirs, and a
@@ -554,6 +556,14 @@ impl HudAtlas {
             edition.3 = pixels;
         }
         images.push(("patina/white".into(), 4, 4, vec![255; 64]));
+        let backdrop = crate::client_settings::banner_image();
+        images.push((MENU_BACKDROP_SPRITE.into(), backdrop.width, backdrop.height, backdrop.pixels));
+        let (w, h, pixels) = decode_bytes(include_bytes!(
+            "../../../../java-mod/src/main/resources/assets/patina/textures/gui/background/hud-scene.png"
+        ))?;
+        images.push((HUD_BACKDROP_SPRITE.into(), w, h, pixels));
+        let (w,h,pixels)=decode_bytes(include_bytes!("../assets/appleskin-icons.png"))?;
+        images.push(("patina/appleskin".into(),w,h,pixels));
         if full {
             Self::slots(&mut images, crate::trims::slot_size(root));
         }

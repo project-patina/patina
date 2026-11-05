@@ -67,6 +67,7 @@ mod cat_spawner;
 mod chat;
 mod chiseled_bookshelf;
 mod client_ambient;
+mod client_utilities;
 mod clipboard;
 mod code_of_conduct;
 mod combat;
@@ -6291,6 +6292,7 @@ impl Game<'_> {
     /// A key event after rebinding, as the default key of its mapping (the
     /// keyboard and controllers both end here).
     fn mapped_key(&mut self, key: KeyCode, pressed: bool, repeat: bool) -> Result<()> {
+        if pressed && !repeat {self.utility_key_press(key);}
         // Sneak and sprint are ToggleKeyMappings: a press (or a key
         // repeat) flips them when toggling; only releases reach them
         // behind a screen (KeyboardHandler.keyPress).
@@ -6846,6 +6848,29 @@ impl Game<'_> {
                     u32::MAX,
                 );
             }
+            let appleskin_enabled=patina_client::client_settings::get().mods.appleskin.enabled;
+            let food_level=self.player.as_ref().map_or(20,|p|p.health.food.food);
+            let food_preview=|stack:&patina_client::items::ItemStack| {
+                let info=self.items().get(&stack.item)?;
+                let (nutrition,saturation)=info.food?;
+                let consumable=info.consumable.as_ref()?;
+                if food_level>=20&&!info.can_always_eat{return None;}
+                let mut regeneration=0.0;
+                let mut rotten=false;
+                for effect in &consumable.effects {
+                    if let patina_client::items::ConsumeEffect::ApplyEffects{effects,..}=effect {
+                        for effect in effects {
+                            let id=effect.id.strip_prefix("minecraft:").unwrap_or(&effect.id);
+                            if id=="regeneration" {regeneration+=(effect.duration/(50i32.checked_shr(effect.amplifier.max(0)as u32).unwrap_or(0)).max(1)).max(0)as f32;}
+                            rotten|=matches!(id,"poison"|"hunger"|"wither"|"weakness"|"slowness"|"mining_fatigue"|"instant_damage"|"nausea"|"blindness"|"unluck"|"bad_omen"|"darkness");
+                        }
+                    }
+                }
+                Some(patina_client::appleskin::HeldFood{nutrition,saturation,regeneration,rotten})
+            };
+            let appleskin_food=self.stack_in(self.selected).and_then(food_preview)
+                .or_else(||self.offhand.as_ref().and_then(food_preview));
+            let natural_regeneration=self.ui.rules.bool("natural_health_regeneration");
             if !self.creative
                 && !spectator
                 && let Some(p) = &mut self.player
@@ -6897,7 +6922,9 @@ impl Game<'_> {
                     vehicle_hearts,
                 };
                 let draws = self.health_hud.layout(&inputs, wi, hi);
+                if appleskin_enabled {patina_client::appleskin::underlay(&mut batch,atlas,&draws,p.health.food.exhaustion);}
                 hud_layout::paint(&mut batch, atlas, &draws);
+                if appleskin_enabled {patina_client::appleskin::overlay(&mut batch,atlas,&draws,&inputs,appleskin_food,p.health.food.exhaustion,natural_regeneration);}
                 bar_height = self
                     .health_hud
                     .left_height
@@ -11732,7 +11759,7 @@ impl Game<'_> {
         alpha: f64,
     ) -> Vec<patina_client::weather::Vertex> {
         use patina_client::weather;
-        let (intensity, _) = self.world.weather.levels(alpha as f32);
+        let (intensity, _) = self.visual_weather(alpha as f32);
         if intensity <= 0.0 {
             return Vec::new();
         }
@@ -12724,7 +12751,7 @@ impl Game<'_> {
         let water_fog = blend(|b| Some(b.water_fog), [0.0; 3]);
         let mut sky = environment.sample(self.world.day_time, Some(biome_sky), Some(biome_fog));
         let (rain, thunder) = if self.dim == Dim::Overworld {
-            self.world.weather.levels(alpha as f32)
+            self.visual_weather(alpha as f32)
         } else {
             (0.0, 0.0)
         };
@@ -13940,6 +13967,7 @@ impl ApplicationHandler for Game<'_> {
                     if self.screen == Screen::Playing
                         && self.sleeping.is_none()
                         && self.player.is_some()
+                        && !self.utility_zoom_wheel(d)
                         && !self.native_wheel_event(d)
                         && let Some((wheel, (_, vertical_steps))) =
                             self.mouse

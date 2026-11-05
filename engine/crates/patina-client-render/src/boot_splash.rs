@@ -7,18 +7,19 @@
 use crate::hud::{self, HudBatch, rgba};
 use std::time::{Duration, Instant};
 
-const COLUMNS: u32 = 8;
-const FRAMES: u32 = 64;
+const COLUMNS: u32 = 16;
+const FRAMES: u32 = 320;
 const FRAME_SIZE: f32 = 160.0;
-const SHEET_SIZE: f32 = FRAME_SIZE * COLUMNS as f32;
+const SHEET_WIDTH: f32 = FRAME_SIZE * COLUMNS as f32;
+const SHEET_HEIGHT: f32 = FRAME_SIZE * FRAMES.div_ceil(COLUMNS) as f32;
 /// One loop of the sheet.
 const LOOP: Duration = Duration::from_millis(5120);
 /// The animation's size on screen, in window pixels.
 const SIDE: f32 = 240.0;
 /// The part of each loop where the logo may start to fade: the blocks have settled into the
-/// whole cube (frames 24 to 37 hold it) and it has been seen for a moment.
+/// whole cube and it has been seen for a moment.
 const CUBE_FROM: Duration = Duration::from_millis(2240);
-const CUBE_UNTIL: Duration = Duration::from_millis(3040);
+const CUBE_UNTIL: Duration = Duration::from_millis(2800);
 /// Even when the resources are quick, so the logo doesn't flash by.
 const SHOWN_AT_LEAST: Duration = Duration::from_millis(2300);
 const LOGO_FADE: Duration = Duration::from_millis(220);
@@ -102,10 +103,10 @@ impl Splash {
             (frame / COLUMNS) as f32 * FRAME_SIZE,
         );
         // Half a texel in: linear filtering must not reach the frame next to this one.
-        let (u0, v0) = ((u + 0.5) / SHEET_SIZE, (v + 0.5) / SHEET_SIZE);
+        let (u0, v0) = ((u + 0.5) / SHEET_WIDTH, (v + 0.5) / SHEET_HEIGHT);
         let (u1, v1) = (
-            (u + FRAME_SIZE - 0.5) / SHEET_SIZE,
-            (v + FRAME_SIZE - 0.5) / SHEET_SIZE,
+            (u + FRAME_SIZE - 0.5) / SHEET_WIDTH,
+            (v + FRAME_SIZE - 0.5) / SHEET_HEIGHT,
         );
         let side = SIDE.min(batch.width.min(batch.height) * batch.scale * 0.6) / batch.scale;
         let (x, y) = (
@@ -149,17 +150,18 @@ mod tests {
     #[test]
     fn the_sheet_is_the_size_the_splash_expects() {
         let (pixels, width, height) = sheet().unwrap();
-        assert_eq!((width, height), (1280, 1280));
-        assert_eq!(pixels.len(), 1280 * 1280 * 4);
+        assert_eq!((width, height), (2560, 3200));
+        assert_eq!(pixels.len(), 2560 * 3200 * 4);
     }
 
     #[test]
     fn frames_follow_the_wall_clock_and_loop() {
         assert_eq!(frame_at(MS(0)), 0);
-        assert_eq!(frame_at(MS(80)), 1);
-        assert_eq!(frame_at(MS(5119)), 63);
+        assert_eq!(frame_at(MS(16)), 1);
+        assert_eq!(frame_at(MS(80)), 5);
+        assert_eq!(frame_at(MS(5119)), 319);
         assert_eq!(frame_at(MS(5120)), 0);
-        assert_eq!(frame_at(MS(5200 + 5120 * 100)), 1);
+        assert_eq!(frame_at(MS(5200 + 5120 * 100)), 5);
     }
 
     /// The frame drawn at `at`, read back from the quad's texture coordinates.
@@ -167,7 +169,7 @@ mod tests {
         let mut batch = HudBatch::new([1280, 720]);
         splash.draw(&mut batch, at, 1.0);
         let [u, v] = batch.vertices[0].uv;
-        let (column, row) = (u * SHEET_SIZE / FRAME_SIZE, v * SHEET_SIZE / FRAME_SIZE);
+        let (column, row) = (u * SHEET_WIDTH / FRAME_SIZE, v * SHEET_HEIGHT / FRAME_SIZE);
         row.floor() as u32 * COLUMNS + column.floor() as u32
     }
 
@@ -182,13 +184,13 @@ mod tests {
             let mut cells = Vec::with_capacity(160 * 160);
             for y in fy..fy + 160 {
                 for x in fx..fx + 160 {
-                    cells.push(pixels[(y * 1280 + x) * 4 + 3] > 128);
+                    cells.push(pixels[(y * SHEET_WIDTH as usize + x) * 4 + 3] > 128);
                 }
             }
             cells
         };
         let whole = drawn(frame_at(CUBE_FROM));
-        for ms in (2240..3040).step_by(40) {
+        for ms in (2240..2800).step_by(16) {
             assert!(drawn(frame_at(MS(ms))) == whole, "frame at {ms} ms");
         }
     }
@@ -199,7 +201,7 @@ mod tests {
         for ready in (0..30_000).step_by(37) {
             let at = leaving_after(MS(ready));
             assert!(at >= MS(ready).max(SHOWN_AT_LEAST), "ready at {ready}");
-            assert!((2240..3040).contains(&into(at)), "ready at {ready}: {at:?}");
+            assert!((2240..2800).contains(&into(at)), "ready at {ready}: {at:?}");
             assert!(at < MS(ready).max(SHOWN_AT_LEAST) + LOOP);
         }
         // Quick resources: the first hold, not before the minimum.

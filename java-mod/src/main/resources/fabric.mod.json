@@ -8,6 +8,10 @@
 	"license": "MIT",
 	"icon": "assets/patina/icon.png",
 	"environment": "client",
+	"jars": [
+		{"file": "META-INF/jars/appleskin.jar"},
+		{"file": "META-INF/jars/fabric-api.jar"}
+	],
 	"mixins": ["patina.mixins.json"],
 	"depends": {
 		"fabricloader": ">=0.18.0",

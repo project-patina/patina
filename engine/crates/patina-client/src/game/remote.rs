@@ -3684,6 +3684,9 @@ impl Game<'_> {
     /// The player list's view of the connection: the listed players (with
     /// their downloaded skins once ready), online mode, and which players
     /// are in the level with an upside-down name.
+    pub(super) fn own_connection_latency(&self) -> i32 {
+        match &self.remote { None => 0, Some(remote) => remote.tab_players.values().find(|p| p.name == remote.session.name).map_or(-1,|p|p.latency) }
+    }
     pub(super) fn remote_tab_players(
         &mut self,
     ) -> Option<(Vec<patina_client::tab_list::TabPlayer>, bool, Vec<u128>)> {

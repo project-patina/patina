@@ -8,51 +8,68 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.resources.Identifier;
 
-/** The picture behind the menus: the launcher's black Mono landscape, the same in the Rust client. */
+/** The title landscape and the Minecraft scene used to lay out HUD modules. */
 public final class PatinaBackground {
-	private static final String PATH = "/assets/patina/textures/gui/background/landscape-7.png";
-	private static final Identifier ID = Identifier.fromNamespaceAndPath(PatinaClient.MOD_ID, "background/mono");
-	private static final int FALLBACK = 0xFF1F2122;
+	private static final Backdrop MENU = new Backdrop("landscape-7.png", "mono");
+	private static final Backdrop HUD = new Backdrop("hud-scene.png", "hud_scene");
+	private static final int HUD_SCENE_HEIGHT = 1080;
 
-	private static boolean loaded;
-	private static int imageWidth;
-	private static int imageHeight;
-
-	private PatinaBackground() {
-	}
+	private PatinaBackground() { }
 
 	public static void drawMenu(GuiGraphicsExtractor graphics, int width, int height) {
-		draw(graphics, 0, 0, width, height);
+		drawLauncherScene(graphics, 0, 0, width, height);
 	}
 
-	/** Covers the rectangle like CSS {@code cover}, keeping the ground as the launcher banners do. */
-	public static void draw(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
-		if (!load()) {
-			graphics.fill(x, y, x + width, y + height, FALLBACK);
+	static void drawLauncherScene(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
+		drawCover(graphics, MENU, x, y, width, height, Integer.MAX_VALUE, 1f);
+	}
+
+	static void drawHudScene(GuiGraphicsExtractor graphics, int x, int y, int width, int height) {
+		drawCover(graphics, HUD, x, y, width, height, HUD_SCENE_HEIGHT, 0.5f);
+	}
+
+	private static void drawCover(GuiGraphicsExtractor graphics, Backdrop backdrop, int x, int y, int width, int height, int maxHeight, float alignY) {
+		if (width <= 0 || height <= 0) return;
+		if (!backdrop.load()) {
+			graphics.fill(x, y, x + width, y + height, 0xFF1F2122);
 			return;
 		}
-		float scale = Math.max((float) width / imageWidth, (float) height / imageHeight);
-		float shownWidth = width / scale / imageWidth;
-		float shownHeight = height / scale / imageHeight;
-		float u = (1f - shownWidth) / 2f;
-		float v = 1f - shownHeight;
-		graphics.blit(ID, x, y, x + width, y + height, u, u + shownWidth, v, v + shownHeight);
+		int sourceHeight = Math.min(backdrop.height, maxHeight);
+		float scale = Math.max((float) width / backdrop.width, (float) height / sourceHeight);
+		float shownWidth = width / scale;
+		float shownHeight = height / scale;
+		float u = (backdrop.width - shownWidth) / (2f * backdrop.width);
+		float v = (sourceHeight - shownHeight) * alignY / backdrop.height;
+		graphics.blit(backdrop.id, x, y, x + width, y + height, u, u + shownWidth / backdrop.width, v, v + shownHeight / backdrop.height);
 	}
 
-	private static boolean load() {
-		if (!loaded) {
-			loaded = true;
-			try (InputStream stream = PatinaBackground.class.getResourceAsStream(PATH)) {
-				if (stream != null) {
-					NativeImage image = NativeImage.read(stream);
-					imageWidth = image.getWidth();
-					imageHeight = image.getHeight();
-					Minecraft.getInstance().getTextureManager().register(ID, new DynamicTexture(() -> "Patina background", image));
-				}
-			} catch (IOException e) {
-				PatinaClient.LOGGER.warn("Could not read {}", PATH, e);
-			}
+	private static final class Backdrop {
+		private final String path;
+		private final Identifier id;
+		private boolean attempted;
+		private int width;
+		private int height;
+
+		Backdrop(String file, String name) {
+			this.path = "/assets/patina/textures/gui/background/" + file;
+			this.id = Identifier.fromNamespaceAndPath(PatinaClient.MOD_ID, "background/" + name);
 		}
-		return imageWidth > 0;
+
+		boolean load() {
+			if (!this.attempted) {
+				this.attempted = true;
+				try (InputStream stream = PatinaBackground.class.getResourceAsStream(this.path)) {
+					if (stream != null) {
+						NativeImage image = NativeImage.read(stream);
+						this.width = image.getWidth();
+						this.height = image.getHeight();
+						Minecraft.getInstance().getTextureManager().register(this.id, new DynamicTexture(() -> this.path, image));
+					}
+				} catch (IOException e) {
+					PatinaClient.LOGGER.warn("Could not read {}", this.path, e);
+				}
+			}
+			return this.width > 0;
+		}
 	}
 }

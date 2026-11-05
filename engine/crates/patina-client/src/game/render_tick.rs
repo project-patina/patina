@@ -97,7 +97,7 @@ impl Game<'_> {
         let at = [camera.x, camera.y, camera.z];
         let fog_type = fog_type(&self.world, self.res.facts(), at, forward);
         let (rain, thunder) = if self.dim == Dim::Overworld {
-            self.world.weather.levels(self.clock.fraction() as f32)
+            self.visual_weather(self.clock.fraction() as f32)
         } else {
             (0.0, 0.0)
         };
@@ -139,6 +139,9 @@ impl Game<'_> {
         let mut fog = patina_client::fog::setup_fog(tables, &self.fog, &input);
         if !self.settings.patina.fog {
             patina_client::fog::clear_distance_fog(&mut fog, &input);
+        }
+        if patina_client::client_settings::get().mods.no_fog.enabled {
+            fog.environmental_start=1000000.0;fog.environmental_end=1000001.0;fog.render_distance_start=1000000.0;fog.render_distance_end=1000001.0;fog.sky_end=1000001.0;fog.cloud_end=1000001.0;
         }
         fog
     }
@@ -310,7 +313,7 @@ impl Game<'_> {
                 e[2].floor() as i32,
             ];
             let rain = if self.dim == Dim::Overworld {
-                self.world.weather.levels(1.0).0
+                self.visual_weather(1.0).0
             } else {
                 0.0
             };
@@ -333,7 +336,7 @@ impl Game<'_> {
             self.particles.camera = e;
         }
         let (rain, _) = if self.dim == Dim::Overworld {
-            self.world.weather.levels(1.0)
+            self.visual_weather(1.0)
         } else {
             (0.0, 0.0)
         };

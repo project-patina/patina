@@ -10,13 +10,13 @@ import net.minecraft.resources.Identifier;
 public final class PatinaSplash {
 	static final Identifier TEXTURE = Identifier.fromNamespaceAndPath(PatinaClient.MOD_ID, "textures/gui/splash.png");
 
-	private static final int COLUMNS = 8;
-	private static final int FRAMES = 64;
+	private static final int COLUMNS = 16;
+	private static final int FRAMES = 320;
 	private static final int FRAME_SIZE = 160;
 	private static final long LOOP_MS = 5120;
-	/** Where in a loop the fragments have settled into the whole cube, frames 28 to 37. */
+	/** Where in a loop the fragments have settled into the whole cube. */
 	private static final long CUBE_FROM_MS = 2240;
-	private static final long CUBE_UNTIL_MS = 3040;
+	private static final long CUBE_UNTIL_MS = 2800;
 	private static final float SIZE_PIXELS = 240f;
 	private static final float MIN_HEIGHT_SHARE = 0.22f;
 	private static final int BAR_GAP = 6;
@@ -67,7 +67,7 @@ public final class PatinaSplash {
 			(graphics.guiWidth() - size) / 2, (graphics.guiHeight() - size) / 2,
 			frame % COLUMNS * FRAME_SIZE, frame / COLUMNS * FRAME_SIZE,
 			size, size, FRAME_SIZE, FRAME_SIZE,
-			COLUMNS * FRAME_SIZE, COLUMNS * FRAME_SIZE,
+			COLUMNS * FRAME_SIZE, ((FRAMES + COLUMNS - 1) / COLUMNS) * FRAME_SIZE,
 			color
 		);
 	}

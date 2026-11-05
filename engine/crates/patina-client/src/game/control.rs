@@ -834,6 +834,7 @@ impl Game<'_> {
     }
 
     fn control_key_down(&mut self, key: KeyCode) -> Result<()> {
+        self.utility_key_press(key);
         self.physical_keys.insert(key);
         // The window's shortcuts come before any screen, here too.
         if self.screenshot_shortcut(key, false) {

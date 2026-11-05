@@ -271,6 +271,7 @@ impl Game<'_> {
             u32::MAX,
             true,
         );
+        self.draw_death_info(batch);
         let active = self
             .ui
             .died_at

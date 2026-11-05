@@ -338,6 +338,9 @@ impl Game<'_> {
             .riding
             .and_then(|id| self.boats.iter().find(|b| b.id == id))
             .map_or(0.0, |b| b.delta_rotation);
+        let utility=&self.extras.utilities;
+        let (camera_yaw,camera_pitch)=if utility.perspective{(utility.yaw,utility.pitch)}else{(self.yaw,self.pitch)};
+        let distance=if utility.perspective{f64::from(patina_client::client_settings::get().mods.perspective.factor)}else{distance};
         let entity = CameraEntity {
             position: [p.position.x, p.position.y, p.position.z],
             previous: [
@@ -347,10 +350,10 @@ impl Game<'_> {
             ],
             // Entity.turn moves the old rotation with the new: the mouse
             // turns the view every frame without interpolation.
-            x_rot: self.pitch,
-            y_rot: self.yaw,
-            x_rot_o: self.pitch,
-            y_rot_o: self.yaw - ride_turn,
+            x_rot: camera_pitch,
+            y_rot: camera_yaw,
+            x_rot_o: camera_pitch,
+            y_rot_o: camera_yaw - ride_turn,
             eye_height: p.dimensions.eye_height,
             living: Some(LivingCamera {
                 scale,
@@ -508,6 +511,9 @@ impl Game<'_> {
     /// The model's old pitch is the player's `xRotO`, which the turn moves
     /// with `xRot` (`turn_rotation`).
     pub(super) fn turn_player(&mut self, xo: f64, yo: f64) {
+        if self.extras.utilities.perspective {
+            let state=&mut self.extras.utilities;let rotation=turn_rotation(state.yaw,state.pitch,None,xo,yo);state.yaw=rotation.y_rot;state.pitch=rotation.x_rot;return;
+        }
         let pitch_o = self.player_model.as_ref().map(|m| m.previous_head_pitch);
         let rotation = turn_rotation(self.yaw, self.pitch, pitch_o, xo, yo);
         self.yaw = rotation.y_rot;

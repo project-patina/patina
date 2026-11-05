@@ -2515,14 +2515,27 @@ impl Game<'_> {
         let lines = Self::resolved(&lines);
         // The component's height does not depend on where it is drawn, so a
         // probe at the origin gives the box its extra height.
+        let utility=patina_client::client_settings::get().mods;
+        let shulker=utility.shulker_tooltip.enabled&&stack.item.ends_with("shulker_box")&&(!utility.shulker_tooltip.require_shift||self.has_shift_down());
+        let food=utility.appleskin.enabled.then(||self.items().get(&stack.item).and_then(|info|info.food)).flatten();
         let probe = patina_client::bundle::tooltip_layout(self.items(), stack, 0.0, 0.0, 96.0);
-        let extra = probe.as_ref().map_or(0.0, |l| l.height + 2.0);
+        let extra = if shulker{58.0}else if food.is_some(){22.0}else{probe.as_ref().map_or(0.0, |l| l.height + 2.0)};
         let atlas = &self.gui.atlas;
-        let (x, y, w, h) =
+        let (mut x, y, mut w, h) =
             Self::tooltip_geometry(atlas, &lines, (x, y), (batch.width, batch.height), extra);
+        if shulker {w=w.max(164.0);x=x.min((batch.width-w-4.0).max(4.0));}
         Self::tooltip_box(batch, atlas, x, y, w, h);
         let text_h = h - extra;
         Self::tooltip_text(batch, atlas, &lines, x, y);
+        if shulker {
+            let contents=stack.data().map(|data|data.container.clone()).unwrap_or_default();let top=y+text_h+2.0;
+            for slot in 0..27 {let sx=x+1.0+(slot%9)as f32*18.0;let sy=top+1.0+(slot/9)as f32*18.0;
+                batch.fill(&self.gui.atlas,sx,sy,18.0,18.0,rgba(102,88,112,255));batch.fill(&self.gui.atlas,sx+1.0,sy+1.0,16.0,16.0,rgba(33,28,39,255));
+                if let Some((_,stack))=contents.iter().find(|(id,_)|*id as usize==slot){self.draw_item(batch,stack,sx+1.0,sy+1.0);}
+            }
+            return;
+        }
+        if let Some((nutrition,saturation))=food {patina_client::appleskin::food_tooltip(batch,&self.gui.atlas,x,y+text_h+2.0,nutrition,saturation);return;}
         let Some(layout) =
             patina_client::bundle::tooltip_layout(self.items(), stack, x, y + text_h + 2.0, w)
         else {

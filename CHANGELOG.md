@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.5 — 2026-11-05
+
+### Added
+
+- Eleven new built-in mods in the Patina Client, on Fabric and in the Rust client, each
+  with its own switch and settings: AppleSkin, Shulker Tooltip, Speedometer, Zoom (C),
+  Ping, Perspective (V), Horse Stats, Status Effects, Weather Changer, Death Info and
+  No Fog. Zoom and Perspective take any key and can be held or toggled; Death Info shows
+  the dimension and time of death and copies the coordinates.
+- The Patina Client screen is a catalogue of all sixteen mods with a search, a settings
+  page per mod and a reset for each.
+- The Fabric client carries AppleSkin 3.0.10 and Fabric API 0.165.2 from Modrinth as
+  nested jars; `scripts/build-java-mod.sh` downloads them, pinned by SHA-256. The Rust
+  client draws AppleSkin's overlays itself.
+
+### Changed
+
+- The clients' loading animation steps every 16 ms instead of 80 and shows the Patina
+  wordmark under the finished cube. The launcher's update screen keeps its lighter sheet.
+
 ## 0.4.4 — 2026-11-05
 
 ### Changed

@@ -491,6 +491,21 @@ pub fn button(
 ) {
     crate::widgets::record(&label.plain(), [x, y, w, h], active);
     crate::widgets::widget_cursor(hover, active);
+    button_face(batch, atlas, x, y, w, h, label, active, hover);
+}
+
+/// The visible button label can differ from the label used by controls.
+pub(crate) fn button_face(
+    batch: &mut HudBatch,
+    atlas: &HudAtlas,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    label: &Text,
+    active: bool,
+    hover: bool,
+) {
     let sprite = if !active {
         "gui/sprites/widget/button_disabled"
     } else if hover {

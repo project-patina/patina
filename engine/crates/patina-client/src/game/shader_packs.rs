@@ -148,7 +148,6 @@ impl Game<'_> {
                 self.shader_pack_failed(name, dimension, &panic);
             }
         }
-        let lerp = |(old, new): (f32, f32)| old + (new - old) * partial;
         let at = camera.floor().as_ivec3();
         let light = self.world.light(at.x, at.y, at.z);
         let biome = self
@@ -160,8 +159,8 @@ impl Game<'_> {
         let info = biome.map(|b| self.res.biomes().get(b));
         PackInputs {
             day_time: self.world.day_time,
-            rain: lerp(self.world.weather.rain_level),
-            thunder: lerp(self.world.weather.thunder_level),
+            rain: self.visual_weather(partial).0,
+            thunder: self.visual_weather(partial).1,
             eye_in: match self.camera_fluid(camera.to_array()) {
                 CameraFluid::None => 0,
                 CameraFluid::Water => 1,

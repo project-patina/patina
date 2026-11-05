@@ -48,6 +48,7 @@ pub enum Anchor {
     BottomLeft,
     BottomCenter,
     BottomRight,
+    HotbarLeft,
 }
 impl Anchor {
     pub const ALL: [Anchor; 9] = [
@@ -128,20 +129,124 @@ pub struct PlacedMod {
     #[serde(flatten)]
     pub place: Place,
 }
-/// The three mods, in the order they draw and the settings list them.
+/// A rendering module has no HUD position or size.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ToggleMod {
+    pub enabled: bool,
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct KeysMod {
+    pub enabled: bool,
+    #[serde(flatten)]
+    pub place: Place,
+    pub show_mouse: bool,
+    pub show_space: bool,
+    pub show_shift: bool,
+    pub show_labels: bool,
+}
+impl Default for KeysMod {
+    fn default() -> Self { Self { enabled: false, place: Place::at(Anchor::BottomRight), show_mouse: true, show_space: true, show_shift: true, show_labels: true } }
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CoordinatesMod {
+    pub enabled: bool,
+    #[serde(flatten)]
+    pub place: Place,
+    pub show_direction: bool,
+    pub show_angle: bool,
+    pub show_biome: bool,
+    pub background: bool,
+}
+impl Default for CoordinatesMod {
+    fn default() -> Self { Self { enabled: false, place: Place::at(Anchor::TopRight), show_direction: true, show_angle: false, show_biome: false, background: false } }
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ArmorMod {
+    pub enabled: bool,
+    #[serde(flatten)]
+    pub place: Place,
+    pub vertical: bool,
+    pub theme: String,
+    pub hide_empty: bool,
+    pub display: String,
+    pub dynamic_color: bool,
+    pub warning: bool,
+    pub warning_threshold: u8,
+    hotbar_anchor_migrated: bool,
+}
+impl Default for ArmorMod {
+    fn default() -> Self { Self { enabled: false, place: Place::at(Anchor::HotbarLeft), vertical: false, theme: "minecraft".into(), hide_empty: false, display: "bar".into(), dynamic_color: true, warning: true, warning_threshold: 20, hotbar_anchor_migrated: true } }
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct InfoMod {
+    pub enabled: bool,
+    #[serde(flatten)] pub place: Place,
+    pub background: bool,
+    pub unit: String,
+}
+impl Default for InfoMod {
+    fn default() -> Self { Self { enabled: false, place: Place::default(), background: false, unit: "m/s".into() } }
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EffectsMod {
+    pub enabled: bool,
+    #[serde(flatten)] pub place: Place,
+    pub columns: u8,
+    pub show_duration: bool,
+    pub show_amplifier: bool,
+}
+impl Default for EffectsMod {
+    fn default() -> Self { Self { enabled: false, place: Place::at(Anchor::CenterRight), columns: 2, show_duration: true, show_amplifier: true } }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Utility { AppleSkin, ShulkerTooltip, Zoom, Perspective, HorseStats, Weather, DeathInfo, NoFog }
+impl Utility {
+    pub const ALL: [Self; 8] = [Self::AppleSkin, Self::ShulkerTooltip, Self::Zoom, Self::Perspective, Self::HorseStats, Self::Weather, Self::DeathInfo, Self::NoFog];
+    pub fn key(self) -> &'static str { match self { Self::AppleSkin => "appleskin", Self::ShulkerTooltip => "shulker_tooltip", Self::Zoom => "zoom", Self::Perspective => "perspective", Self::HorseStats => "horse_stats", Self::Weather => "weather", Self::DeathInfo => "death_info", Self::NoFog => "no_fog" } }
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct UtilityMod {
+    pub enabled: bool, pub key: i32, pub activation: String, pub factor: f32,
+    pub smooth: bool, pub sensitivity: f32, pub weather: String, pub strength: f32, pub require_shift: bool,
+}
+impl Default for UtilityMod {
+    fn default() -> Self { Self { enabled: false, key: 67, activation: "hold".into(), factor: 4.0, smooth: true, sensitivity: 0.25, weather: "clear".into(), strength: 1.0, require_shift: false } }
+}
+/// GLFW key codes shared with the Fabric configuration.
+pub fn glfw_key(code: winit::keyboard::KeyCode) -> i32 {
+    use winit::keyboard::KeyCode as K;
+    let name = format!("{code:?}");
+    if let Some(letter) = name.strip_prefix("Key").filter(|s| s.len() == 1) { return letter.as_bytes()[0] as i32; }
+    if let Some(digit) = name.strip_prefix("Digit").filter(|s| s.len() == 1) { return digit.as_bytes()[0] as i32; }
+    if let Some(number) = name.strip_prefix('F').and_then(|s| s.parse::<i32>().ok()) { if (1..=25).contains(&number) { return 289 + number; } }
+    match code { K::CapsLock => 280, K::ScrollLock => 281, K::NumLock => 282, K::PrintScreen => 283, K::Pause => 284, K::Numpad0 => 320, K::Numpad1 => 321, K::Numpad2 => 322, K::Numpad3 => 323, K::Numpad4 => 324, K::Numpad5 => 325, K::Numpad6 => 326, K::Numpad7 => 327, K::Numpad8 => 328, K::Numpad9 => 329, K::NumpadDecimal => 330, K::NumpadDivide => 331, K::NumpadMultiply => 332, K::NumpadSubtract => 333, K::NumpadAdd => 334, K::NumpadEnter => 335, K::NumpadEqual => 336, K::ContextMenu => 348, K::Space => 32, K::Escape => 256, K::Enter => 257, K::Tab => 258, K::Backspace => 259, K::Insert => 260, K::Delete => 261, K::ArrowRight => 262, K::ArrowLeft => 263, K::ArrowDown => 264, K::ArrowUp => 265, K::PageUp => 266, K::PageDown => 267, K::Home => 268, K::End => 269, K::ShiftLeft => 340, K::ControlLeft => 341, K::AltLeft => 342, K::SuperLeft => 343, K::ShiftRight => 344, K::ControlRight => 345, K::AltRight => 346, K::SuperRight => 347, K::Minus => 45, K::Equal => 61, K::BracketLeft => 91, K::BracketRight => 93, K::Backslash => 92, K::Semicolon => 59, K::Quote => 39, K::Comma => 44, K::Period => 46, K::Slash => 47, K::Backquote => 96, _ => -1 }
+}
+
+/// The built-in HUD modules, in their drawing and catalogue order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mod {
     Fps,
     Keystrokes,
     Coordinates,
+    Armor,
+    Speedometer, Ping, Effects,
 }
 impl Mod {
-    pub const ALL: [Mod; 3] = [Mod::Fps, Mod::Keystrokes, Mod::Coordinates];
+    pub const ALL: [Mod; 7] = [Mod::Fps, Mod::Keystrokes, Mod::Coordinates, Mod::Armor, Mod::Speedometer, Mod::Ping, Mod::Effects];
     fn key(self) -> &'static str {
         match self {
             Mod::Fps => "fps",
             Mod::Keystrokes => "keystrokes",
             Mod::Coordinates => "coordinates",
+            Mod::Armor => "armor",
+            Mod::Speedometer => "speedometer", Mod::Ping => "ping", Mod::Effects => "status_effects",
         }
     }
 }
@@ -149,30 +254,39 @@ impl Mod {
 #[serde(default)]
 pub struct Mods {
     pub fps: FpsMod,
-    pub keystrokes: PlacedMod,
-    pub coordinates: PlacedMod,
+    pub keystrokes: KeysMod,
+    pub coordinates: CoordinatesMod,
+    pub armor: ArmorMod,
+    pub fullbright: ToggleMod,
+    pub speedometer: InfoMod, pub ping: InfoMod, pub status_effects: EffectsMod,
+    pub appleskin: UtilityMod, pub shulker_tooltip: UtilityMod, pub zoom: UtilityMod,
+    pub perspective: UtilityMod, pub horse_stats: UtilityMod, pub weather: UtilityMod, pub death_info: UtilityMod, pub no_fog: UtilityMod,
 }
 impl Default for Mods {
     fn default() -> Self {
         Self {
             fps: FpsMod::default(),
-            keystrokes: PlacedMod {
-                enabled: false,
-                place: Place::at(Anchor::BottomRight),
-            },
-            coordinates: PlacedMod {
-                enabled: false,
-                place: Place::at(Anchor::TopRight),
-            },
+            keystrokes: KeysMod::default(),
+            coordinates: CoordinatesMod::default(),
+            armor: ArmorMod::default(),
+            fullbright: ToggleMod::default(),
+            speedometer: InfoMod { place: Place::at(Anchor::BottomLeft), ..Default::default() }, ping: InfoMod::default(), status_effects: EffectsMod::default(),
+            appleskin: UtilityMod::default(), shulker_tooltip: UtilityMod::default(), zoom: UtilityMod::default(),
+            perspective: UtilityMod { key: 86, ..Default::default() }, horse_stats: UtilityMod::default(), weather: UtilityMod::default(), death_info: UtilityMod::default(), no_fog: UtilityMod::default(),
         }
     }
 }
 impl Mods {
+    pub fn utility(&self, m: Utility) -> &UtilityMod { match m { Utility::AppleSkin => &self.appleskin, Utility::ShulkerTooltip => &self.shulker_tooltip, Utility::Zoom => &self.zoom, Utility::Perspective => &self.perspective, Utility::HorseStats => &self.horse_stats, Utility::Weather => &self.weather, Utility::DeathInfo => &self.death_info, Utility::NoFog => &self.no_fog } }
+    pub fn utility_mut(&mut self, m: Utility) -> &mut UtilityMod { match m { Utility::AppleSkin => &mut self.appleskin, Utility::ShulkerTooltip => &mut self.shulker_tooltip, Utility::Zoom => &mut self.zoom, Utility::Perspective => &mut self.perspective, Utility::HorseStats => &mut self.horse_stats, Utility::Weather => &mut self.weather, Utility::DeathInfo => &mut self.death_info, Utility::NoFog => &mut self.no_fog } }
+
     pub fn enabled(&self, m: Mod) -> bool {
         match m {
             Mod::Fps => self.fps.enabled,
             Mod::Keystrokes => self.keystrokes.enabled,
             Mod::Coordinates => self.coordinates.enabled,
+            Mod::Armor => self.armor.enabled,
+            Mod::Speedometer => self.speedometer.enabled, Mod::Ping => self.ping.enabled, Mod::Effects => self.status_effects.enabled,
         }
     }
     pub fn enabled_mut(&mut self, m: Mod) -> &mut bool {
@@ -180,13 +294,30 @@ impl Mods {
             Mod::Fps => &mut self.fps.enabled,
             Mod::Keystrokes => &mut self.keystrokes.enabled,
             Mod::Coordinates => &mut self.coordinates.enabled,
+            Mod::Armor => &mut self.armor.enabled,
+            Mod::Speedometer => &mut self.speedometer.enabled, Mod::Ping => &mut self.ping.enabled, Mod::Effects => &mut self.status_effects.enabled,
         }
+    }
+    pub fn reset_options(&mut self, m: Mod) {
+        let enabled = self.enabled(m);
+        let place = self.place(m);
+        match m {
+            Mod::Fps => self.fps = FpsMod::default(),
+            Mod::Keystrokes => self.keystrokes = KeysMod::default(),
+            Mod::Coordinates => self.coordinates = CoordinatesMod::default(),
+            Mod::Armor => self.armor = ArmorMod::default(),
+            Mod::Speedometer => self.speedometer = InfoMod::default(), Mod::Ping => self.ping = InfoMod::default(), Mod::Effects => self.status_effects = EffectsMod::default(),
+        }
+        *self.enabled_mut(m) = enabled;
+        *self.place_mut(m) = place;
     }
     pub fn place(&self, m: Mod) -> Place {
         match m {
             Mod::Fps => self.fps.place,
             Mod::Keystrokes => self.keystrokes.place,
             Mod::Coordinates => self.coordinates.place,
+            Mod::Armor => self.armor.place,
+            Mod::Speedometer => self.speedometer.place, Mod::Ping => self.ping.place, Mod::Effects => self.status_effects.place,
         }
     }
     pub fn place_mut(&mut self, m: Mod) -> &mut Place {
@@ -194,6 +325,8 @@ impl Mods {
             Mod::Fps => &mut self.fps.place,
             Mod::Keystrokes => &mut self.keystrokes.place,
             Mod::Coordinates => &mut self.coordinates.place,
+            Mod::Armor => &mut self.armor.place,
+            Mod::Speedometer => &mut self.speedometer.place, Mod::Ping => &mut self.ping.place, Mod::Effects => &mut self.status_effects.place,
         }
     }
 }
@@ -259,9 +392,22 @@ pub fn parse(text: &str) -> ClientSettings {
             Mod::Fps => 8.0,
             Mod::Keystrokes => 58.0,
             Mod::Coordinates => 18.0,
+            Mod::Armor => 32.0,
+            Mod::Speedometer | Mod::Ping => 14.0, Mod::Effects => 60.0,
         };
         let enabled = settings.mods.enabled(m);
         let place = settings.mods.place_mut(m);
+        if m == Mod::Armor && saved.get("hotbar_anchor_migrated").and_then(serde_json::Value::as_bool) != Some(true)
+            && *place == Place::at(Anchor::BottomLeft)
+        {
+            place.position = Anchor::HotbarLeft;
+        }
+        if place.position == Anchor::HotbarLeft {
+            place.x = 0.0;
+            place.y = 0.0;
+            if !(MIN_SCALE..=MAX_SCALE).contains(&place.scale) { place.scale = 1.0; }
+            continue;
+        }
         let corner = Anchor::ALL
             .iter()
             .position(|c| *c == place.position)
@@ -277,12 +423,34 @@ pub fn parse(text: &str) -> ClientSettings {
             place.scale = 1.0;
         }
     }
+    for utility in Utility::ALL {
+        let m = settings.mods.utility_mut(utility);
+        if !(1.5..=20.0).contains(&m.factor) { m.factor = 4.0; }
+        if !(0.05..=1.0).contains(&m.sensitivity) { m.sensitivity = 0.25; }
+        if !(0.0..=1.0).contains(&m.strength) { m.strength = 1.0; }
+        if m.activation != "toggle" { m.activation = "hold".into(); }
+        if !["clear", "rain", "thunder"].contains(&m.weather.as_str()) { m.weather = "clear".into(); }
+        if !(-1..=348).contains(&m.key) { m.key = if utility == Utility::Perspective { 86 } else { 67 }; }
+    }
+    settings.mods.status_effects.columns = settings.mods.status_effects.columns.clamp(1, 4);
+    if settings.mods.speedometer.unit != "km/h" { settings.mods.speedometer.unit = "m/s".into(); }
+    settings.mods.armor.hotbar_anchor_migrated = true;
     settings
 }
 /// Drops the values a mod's fields can't take, so one broken value never
 /// costs the rest of the file.
 fn sanitize(mods: &mut serde_json::Value) {
     use serde_json::Value;
+    if let Some(value) = mods.get("fullbright")
+        && serde_json::from_value::<ToggleMod>(value.clone()).is_err()
+        && let Some(map) = mods.as_object_mut()
+    {
+        map.remove("fullbright");
+    }
+    for utility in Utility::ALL {
+        if let Some(value) = mods.get(utility.key()) && serde_json::from_value::<UtilityMod>(value.clone()).is_err()
+            && let Some(map) = mods.as_object_mut() { map.remove(utility.key()); }
+    }
     for m in Mod::ALL {
         let Some(Value::Object(fields)) = mods.get_mut(m.key()) else {
             if let Some(map) = mods.as_object_mut() {
@@ -291,9 +459,16 @@ fn sanitize(mods: &mut serde_json::Value) {
             continue;
         };
         fields.retain(|key, value| match key.as_str() {
-            "enabled" => value.is_boolean(),
+            "enabled" | "show_mouse" | "show_space" | "show_shift" | "show_labels" | "show_direction" | "show_angle" | "show_biome" | "background" | "vertical" | "hide_empty" | "dynamic_color" | "warning" | "show_duration" | "show_amplifier" => value.is_boolean(),
+            "unit" => value.as_str().is_some_and(|s| ["m/s", "km/h"].contains(&s)),
+            "columns" => value.as_u64().is_some_and(|v| (1..=4).contains(&v)),
+            "theme" => value.as_str().is_some_and(|s| ["minecraft", "patina"].contains(&s)),
+            "display" => value.as_str().is_some_and(|s| ["bar", "remaining"].contains(&s)),
+            "warning_threshold" => value.as_u64().is_some_and(|v| (5..=50).contains(&v)),
+            "hotbar_anchor_migrated" => m == Mod::Armor && value.is_boolean(),
             "x" | "y" | "scale" => value.is_number(),
-            "position" => serde_json::from_value::<Anchor>(value.clone()).is_ok(),
+            "position" => serde_json::from_value::<Anchor>(value.clone())
+                .is_ok_and(|anchor| anchor != Anchor::HotbarLeft || m == Mod::Armor),
             "accuracy" => serde_json::from_value::<FpsAccuracy>(value.clone()).is_ok(),
             "style" => serde_json::from_value::<FpsStyle>(value.clone()).is_ok(),
             _ => false,
@@ -385,6 +560,54 @@ pub fn banner_image() -> BackdropImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn utility_modules_round_trip_and_invalid_values_do_not_reset_existing_hud() {
+        let settings=parse(r#"{"mods":{"zoom":{"enabled":true,"key":90,"activation":"toggle","factor":8.5,"smooth":false,"sensitivity":0.2},"perspective":{"enabled":true,"key":66,"activation":"hold","factor":6},"weather":{"enabled":true,"weather":"thunder","strength":0.75},"speedometer":{"enabled":true,"unit":"km/h"},"status_effects":{"enabled":true,"columns":3},"fps":{"position":"center","x":12,"y":-8}}}"#);
+        assert_eq!(settings.mods.zoom.key,90);assert_eq!(settings.mods.perspective.key,66);
+        assert_eq!(settings.mods.zoom.activation,"toggle");assert_eq!(settings.mods.weather.weather,"thunder");
+        assert_eq!(settings.mods.speedometer.unit,"km/h");assert_eq!(settings.mods.status_effects.columns,3);
+        assert_eq!(parse(&serde_json::to_string(&settings).unwrap()),settings);
+        let broken=parse(r#"{"mods":{"zoom":{"enabled":"broken"},"perspective":null,"fps":{"position":"center","x":12,"y":-8}}}"#);
+        assert_eq!(broken.mods.fps,settings.mods.fps);assert!(!broken.mods.zoom.enabled);assert_eq!(broken.mods.perspective.key,86);
+    }
+
+    #[test]
+    fn fullbright_migrates_and_round_trips_independently_of_hud() {
+        let old = parse(r#"{"mods":{"fps":{"position":"center","x":12,"y":-8}}}"#);
+        assert!(!old.mods.fullbright.enabled);
+        let enabled = parse(r#"{"mods":{"fullbright":{"enabled":true},"fps":{"position":"center","x":12,"y":-8}}}"#);
+        assert!(enabled.mods.fullbright.enabled);
+        assert_eq!(old.mods.fps, enabled.mods.fps);
+        assert_eq!(parse(&serde_json::to_string(&enabled).unwrap()), enabled);
+        let broken = parse(r#"{"mods":{"fullbright":{"enabled":"broken"},"fps":{"position":"center","x":12,"y":-8}}}"#);
+        assert_eq!(broken, old);
+    }
+
+    #[test]
+    fn module_options_round_trip_without_moving_existing_hud() {
+        let original = parse(r#"{"mods":{"fps":{"enabled":false,"position":"center","x":12,"y":-8},"keystrokes":{"enabled":true,"show_space":false,"show_shift":false},"coordinates":{"show_biome":true,"show_angle":true},"armor":{"enabled":true,"vertical":true,"theme":"patina","display":"remaining","hide_empty":true,"dynamic_color":false,"warning_threshold":30}}}"#);
+        assert!(!original.mods.fps.enabled);
+        assert_eq!((original.mods.fps.place.x, original.mods.fps.place.y), (12.0, -8.0));
+        assert!(!original.mods.keystrokes.show_space && !original.mods.keystrokes.show_shift);
+        assert!(original.mods.coordinates.show_biome && original.mods.coordinates.show_angle);
+        assert_eq!(original.mods.armor.warning_threshold, 30);
+        assert_eq!(parse(&serde_json::to_string(&original).unwrap()), original);
+        let repaired = parse(r#"{"mods":{"armor":{"display":"broken","theme":null,"warning_threshold":999},"keystrokes":{"show_space":"broken"}}}"#);
+        assert_eq!(repaired.mods.armor, ArmorMod::default());
+        assert!(repaired.mods.keystrokes.show_space);
+    }
+
+    #[test]
+    fn only_the_old_armor_default_moves_to_the_hotbar() {
+        let mut old = parse(r#"{"mods":{"armor":{"position":"bottom_left","x":0,"y":0,"scale":1}}}"#);
+        assert_eq!(old.mods.armor.place.position, Anchor::HotbarLeft);
+        old.mods.armor.place = Place::at(Anchor::BottomLeft);
+        assert_eq!(parse(&serde_json::to_string(&old).unwrap()).mods.armor.place, old.mods.armor.place);
+        let moved = parse(r#"{"mods":{"armor":{"position":"bottom_left","x":14,"y":0,"scale":1}}}"#);
+        assert_eq!(moved.mods.armor.place.position, Anchor::BottomLeft);
+        assert_eq!(moved.mods.armor.place.x, 14.0);
+    }
 
     #[test]
     fn missing_or_foreign_fields_keep_their_defaults() {

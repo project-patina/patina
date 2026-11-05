@@ -7,11 +7,23 @@
 		"AbstractWidgetMixin",
 		"GuiGraphicsExtractorMixin",
 		"HudMixin",
+		"LightmapRenderStateExtractorMixin",
 		"LoadingOverlayMixin",
 		"MinecraftMixin",
 		"PanoramaMixin",
 		"PauseScreenMixin",
-		"TitleScreenMixin"
+		"TitleScreenMixin",
+		"UtilityInputMixin",
+		"UtilityMouseMixin",
+		"UtilityCameraMixin",
+		"AppleSkinToggleMixin",
+		"AppleSkinTooltipToggleMixin",
+		"UtilityFogMixin",
+		"UtilityWeatherMixin",
+		"UtilityDeathMixin",
+		"HorseStatsMixin",
+		"ShulkerTooltipMixin",
+		"UtilityKeyboardMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

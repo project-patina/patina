@@ -13,6 +13,11 @@ dependencies {
 	// Minecraft 26.x ships unobfuscated, so there is no mappings dependency.
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	implementation files("libs/appleskin.jar", "libs/fabric-api.jar")
+}
+
+tasks.named("jar", Jar) {
+	from("libs") { include "*.jar"; into "META-INF/jars" }
 }
 
 processResources {
@@ -30,4 +35,16 @@ java {
 tasks.withType(JavaCompile).configureEach {
 	options.release = 25
 	options.encoding = "UTF-8"
+}
+
+// These smoke tests have a main method and deliberately run before Minecraft bootstrap.
+tasks.register("previewSmokeTest", JavaExec) {
+	dependsOn testClasses
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = "dev.patina.client.ArmorPreviewSmokeTest"
+}
+
+tasks.named("test", Test) {
+	dependsOn "previewSmokeTest"
+	failOnNoDiscoveredTests = false
 }

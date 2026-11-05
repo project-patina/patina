@@ -1428,6 +1428,7 @@ impl Game<'_> {
     /// `Hud.extractEffects`: icons top-right, beneficial row then harmful row;
     /// every screen but the inventories keeps them.
     pub(super) fn draw_effect_icons(&self, batch: &mut HudBatch) {
+        if patina_client::client_settings::get().mods.status_effects.enabled { return; }
         if self.potions.effects.list.is_empty() || self.screen_shows_active_effects(batch) {
             return;
         }

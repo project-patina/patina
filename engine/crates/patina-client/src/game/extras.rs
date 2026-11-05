@@ -13,6 +13,7 @@ use winit::{event::MouseButton, keyboard::KeyCode};
 
 #[derive(Default)]
 pub(super) struct ExtrasState {
+    pub(super) utilities: super::client_utilities::UtilityState,
     fps: FpsCounter,
     /// Left and right mouse buttons: held, and their clicks.
     mouse: [bool; 2],
@@ -45,6 +46,7 @@ impl Game<'_> {
     }
     /// Once per frame: the frame's time, and keys let go behind screens.
     pub(super) fn extras_frame(&mut self, elapsed: Duration) {
+        self.utility_frame(elapsed);
         // Under agent control the window may lack focus without pausing.
         let focused = self.focused || self.control.is_some();
         let playing = self.screen == Screen::Playing && self.title.is_none() && focused;
@@ -146,6 +148,8 @@ impl Game<'_> {
     /// A mod's zoom in effect (`native_zoom`): (factor, smooth, turning
     /// scale); none is 1.
     fn zoom_now(&self) -> (f32, bool, f64) {
+        let utility=&self.extras.utilities;
+        if utility.zoom || utility.current_zoom>1.001 {return (utility.current_zoom,false,if utility.zoom{client_settings_sensitivity()}else{1.0});}
         self.native_zoom_now().map_or((1.0, true, 1.0), |z| {
             (z.factor, z.smooth, f64::from(z.turn))
         })
@@ -217,6 +221,9 @@ impl Game<'_> {
             .as_ref()
             .map_or([0.0; 3], |p| [p.position.x, p.position.y, p.position.z]);
         extras_hud::ModReadings {
+            speed: self.player.as_ref().map_or(0.0,|p| {let dx=p.position.x-self.previous_position.x;let dz=p.position.z-self.previous_position.z;let speed=(dx*dx+dz*dz).sqrt()*20.0;if speed>1280.0{0.0}else{speed}}),
+            ping: self.own_connection_latency(),
+            effects: self.potions.effects.list.iter().filter(|e|e.visible).map(|e|extras_hud::EffectReading{id:e.id.into(),amplifier:e.amplifier,ticks:e.duration}).collect(),
             fps: self.extras.fps.reading(),
             // Keys are held by their default binding, whatever is bound to them.
             keys: [
@@ -226,14 +233,32 @@ impl Game<'_> {
                 held(KeyCode::KeyD),
                 self.extras.mouse[0],
                 self.extras.mouse[1],
+                held(KeyCode::Space),
+                held(KeyCode::ShiftLeft) || held(KeyCode::ShiftRight),
             ],
             position,
             yaw: self.yaw,
+            pitch: self.pitch,
+            biome: {
+                let [x, y, z] = position.map(|v| v.floor() as i32);
+                let biome = self.world.chunks.get(&(x >> 4, z >> 4)).map_or(0, |c| c.biome(x, y, z));
+                let name = &self.res.biomes().get(biome).name;
+                patina_client::lang::get_or(&format!("biome.{}", name.replace(':', ".")), name)
+            },
+            left_offhand: self.offhand.is_some() && !self.settings.main_hand_left,
+            armor: std::array::from_fn(|i| match &self.armor[i] {
+                Some(stack) => {
+                    let maximum = self.items().get(&stack.item).map_or(0, |info| info.max_damage as i32);
+                    extras_hud::ArmorReading { item: Some(stack.item.to_string()), remaining: (maximum - stack.damage as i32).max(0), maximum }
+                }
+                None => extras_hud::ArmorReading::default(),
+            }),
         }
     }
     /// The height the status effect icons take at the top right
     /// (`Hud.extractEffects`: beneficial at y 1, harmful at y 26).
     fn effect_rows_height(&self) -> f32 {
+        if patina_client::client_settings::get().mods.status_effects.enabled { return 0.0; }
         let effects = &self.potions.effects.list;
         if effects.is_empty() || self.screen != Screen::Playing {
             return 0.0;
@@ -245,3 +270,5 @@ impl Game<'_> {
         if harmful { 50.0 } else { 25.0 }
     }
 }
+
+fn client_settings_sensitivity()->f64 { patina_client::client_settings::get().mods.zoom.sensitivity as f64 }

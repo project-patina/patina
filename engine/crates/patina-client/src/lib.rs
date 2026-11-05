@@ -6,7 +6,7 @@ pub mod ambience;
 pub mod animate_tick;
 pub mod arrows;
 pub use patina_client_render::{
-    assets, atlas_sources, audio, auth, bidi, biome, block_entities, block_entity_anim, boot_splash,
+    appleskin, assets, atlas_sources, audio, auth, bidi, biome, block_entities, block_entity_anim, boot_splash,
     block_entity_render, border_render, breaking, brewing, camera, chat, chunk, chunk_map,
     client_screen, client_settings, clouds, collisions, command_block, containers, crash, datapack, dynamic_light, effects, environment,
     extras, extras_hud, fast_hash, fog, font, gfx, graphics, graphics_ui, hud, hud_layout,
