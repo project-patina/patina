@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.4 — 2026-11-05
+
+### Changed
+
+- New logo: the cube the loading animation builds, drawn from the same geometry and
+  colours by `scripts/render-logo.mjs`. It replaces the old one in the launcher, its
+  opening screen, the app icons on every platform, the Rust client's window, the Fabric
+  mod and the site. On the opening screen the copper layer rises into place and the
+  patina layer lands on it.
+- This update is marked critical: launchers install it at start without asking.
+
 ## 0.4.3 — 2026-11-04
 
 ### Added
