@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.6 — 2026-11-06
+
+### Fixed
+
+- Small fixes in the Patina Client: the shulker box preview is drawn over the screen, a key
+  that cannot be stored no longer unbinds Zoom or Perspective, and while zoomed a number key
+  no longer saves or loads a creative toolbar.
+- The Fabric client asks for Fabric Loader 0.19.3, which its Fabric API needs.
+
 ## 0.4.5 — 2026-11-05
 
 ### Added
