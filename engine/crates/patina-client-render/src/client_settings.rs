@@ -222,10 +222,13 @@ impl Default for UtilityMod {
 /// GLFW key codes shared with the Fabric configuration.
 pub fn glfw_key(code: winit::keyboard::KeyCode) -> i32 {
     use winit::keyboard::KeyCode as K;
-    let name = format!("{code:?}");
-    if let Some(letter) = name.strip_prefix("Key").filter(|s| s.len() == 1) { return letter.as_bytes()[0] as i32; }
-    if let Some(digit) = name.strip_prefix("Digit").filter(|s| s.len() == 1) { return digit.as_bytes()[0] as i32; }
-    if let Some(number) = name.strip_prefix('F').and_then(|s| s.parse::<i32>().ok()) { if (1..=25).contains(&number) { return 289 + number; } }
+    const LETTERS: [K; 26] = [K::KeyA, K::KeyB, K::KeyC, K::KeyD, K::KeyE, K::KeyF, K::KeyG, K::KeyH, K::KeyI, K::KeyJ, K::KeyK, K::KeyL, K::KeyM, K::KeyN, K::KeyO, K::KeyP, K::KeyQ, K::KeyR, K::KeyS, K::KeyT, K::KeyU, K::KeyV, K::KeyW, K::KeyX, K::KeyY, K::KeyZ];
+    const DIGITS: [K; 10] = [K::Digit0, K::Digit1, K::Digit2, K::Digit3, K::Digit4, K::Digit5, K::Digit6, K::Digit7, K::Digit8, K::Digit9];
+    const FUNCTIONS: [K; 25] = [K::F1, K::F2, K::F3, K::F4, K::F5, K::F6, K::F7, K::F8, K::F9, K::F10, K::F11, K::F12, K::F13, K::F14, K::F15, K::F16, K::F17, K::F18, K::F19, K::F20, K::F21, K::F22, K::F23, K::F24, K::F25];
+    // Called for every held key each frame: no allocation.
+    if let Some(i) = LETTERS.iter().position(|&k| k == code) { return 65 + i as i32; }
+    if let Some(i) = DIGITS.iter().position(|&k| k == code) { return 48 + i as i32; }
+    if let Some(i) = FUNCTIONS.iter().position(|&k| k == code) { return 290 + i as i32; }
     match code { K::CapsLock => 280, K::ScrollLock => 281, K::NumLock => 282, K::PrintScreen => 283, K::Pause => 284, K::Numpad0 => 320, K::Numpad1 => 321, K::Numpad2 => 322, K::Numpad3 => 323, K::Numpad4 => 324, K::Numpad5 => 325, K::Numpad6 => 326, K::Numpad7 => 327, K::Numpad8 => 328, K::Numpad9 => 329, K::NumpadDecimal => 330, K::NumpadDivide => 331, K::NumpadMultiply => 332, K::NumpadSubtract => 333, K::NumpadAdd => 334, K::NumpadEnter => 335, K::NumpadEqual => 336, K::ContextMenu => 348, K::Space => 32, K::Escape => 256, K::Enter => 257, K::Tab => 258, K::Backspace => 259, K::Insert => 260, K::Delete => 261, K::ArrowRight => 262, K::ArrowLeft => 263, K::ArrowDown => 264, K::ArrowUp => 265, K::PageUp => 266, K::PageDown => 267, K::Home => 268, K::End => 269, K::ShiftLeft => 340, K::ControlLeft => 341, K::AltLeft => 342, K::SuperLeft => 343, K::ShiftRight => 344, K::ControlRight => 345, K::AltRight => 346, K::SuperRight => 347, K::Minus => 45, K::Equal => 61, K::BracketLeft => 91, K::BracketRight => 93, K::Backslash => 92, K::Semicolon => 59, K::Quote => 39, K::Comma => 44, K::Period => 46, K::Slash => 47, K::Backquote => 96, _ => -1 }
 }
 
@@ -560,6 +563,14 @@ pub fn banner_image() -> BackdropImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keys_map_to_the_glfw_codes_fabric_stores() {
+        use winit::keyboard::KeyCode as K;
+        for (key, code) in [(K::KeyA, 65), (K::KeyC, 67), (K::KeyZ, 90), (K::Digit0, 48), (K::Digit9, 57), (K::F1, 290), (K::F25, 314), (K::Space, 32), (K::Numpad5, 325), (K::Fn, -1)] {
+            assert_eq!(glfw_key(key), code, "{key:?}");
+        }
+    }
 
     #[test]
     fn utility_modules_round_trip_and_invalid_values_do_not_reset_existing_hud() {

@@ -223,7 +223,12 @@ impl Game<'_> {
         extras_hud::ModReadings {
             speed: self.player.as_ref().map_or(0.0,|p| {let dx=p.position.x-self.previous_position.x;let dz=p.position.z-self.previous_position.z;let speed=(dx*dx+dz*dz).sqrt()*20.0;if speed>1280.0{0.0}else{speed}}),
             ping: self.own_connection_latency(),
-            effects: self.potions.effects.list.iter().filter(|e|e.visible).map(|e|extras_hud::EffectReading{id:e.id.into(),amplifier:e.amplifier,ticks:e.duration}).collect(),
+            // In identifier order, as the Fabric client lists them.
+            effects: {
+                let mut effects: Vec<_> = self.potions.effects.list.iter().filter(|e|e.visible).map(|e|extras_hud::EffectReading{id:e.id.into(),amplifier:e.amplifier,ticks:e.duration}).collect();
+                effects.sort_by(|a, b| a.id.cmp(&b.id));
+                effects
+            },
             fps: self.extras.fps.reading(),
             // Keys are held by their default binding, whatever is bound to them.
             keys: [

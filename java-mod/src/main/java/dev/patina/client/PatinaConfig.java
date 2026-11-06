@@ -270,7 +270,7 @@ public final class PatinaConfig {
 			utility.strength = Float.isFinite(utility.strength) ? Math.clamp(utility.strength, 0f, 1f) : 1f;
 			if (!List.of("clear", "rain", "thunder").contains(utility.weather == null ? "" : utility.weather)) utility.weather = "clear";
 			if (!"toggle".equals(utility.activation)) utility.activation = "hold";
-			if (utility.key < -1 || utility.key > 348) utility.key = 67;
+			if (utility.key < -1 || utility.key > 348) utility.key = utility == this.mods.perspective ? 86 : 67;
 		}
 		this.mods.status_effects.columns = Math.clamp(this.mods.status_effects.columns, 1, 4);
 		if (!"km/h".equals(this.mods.speedometer.unit)) this.mods.speedometer.unit = "m/s";

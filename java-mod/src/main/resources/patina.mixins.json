@@ -23,7 +23,8 @@
 		"UtilityDeathMixin",
 		"HorseStatsMixin",
 		"ShulkerTooltipMixin",
-		"UtilityKeyboardMixin"
+		"UtilityKeyboardMixin",
+		"UtilityHotbarMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

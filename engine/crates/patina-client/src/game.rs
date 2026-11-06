@@ -13357,11 +13357,13 @@ impl Game<'_> {
                 // Minecraft.handleKeybinds: a spectator's number keys drive
                 // the spectator menu, not the hotbar; a creative player
                 // holding the load or save toolbar key loads or saves a
-                // toolbar instead (load first when both are held).
+                // toolbar instead (load first when both are held). Not while
+                // Zoom is on: its default key is the save toolbar key's too.
                 let load = self.mapped_key_down("key.loadToolbarActivator");
                 if self.spectator() {
                     self.spectator_hotbar_key(slot as i32);
                 } else if self.creative
+                    && !self.extras.utilities.zoom
                     && (load || self.mapped_key_down("key.saveToolbarActivator"))
                 {
                     self.hotbar_load_or_save(slot, load);

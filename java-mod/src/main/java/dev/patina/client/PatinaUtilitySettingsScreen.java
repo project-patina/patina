@@ -117,7 +117,9 @@ public final class PatinaUtilitySettingsScreen extends Screen {
 	}
 	@Override public boolean keyPressed(KeyEvent event) {
 		if (this.binding) {
-			if (event.key() != InputConstants.KEY_ESCAPE) { this.keys.key = event.key() == InputConstants.KEY_DELETE ? -1 : PatinaKeyBindings.sharedCode(event.key()); this.config.save(); }
+			// Delete unbinds; a key the shared table cannot name keeps the old binding.
+			int key = event.key() == InputConstants.KEY_DELETE ? -1 : PatinaKeyBindings.sharedCode(event.key());
+			if (event.key() != InputConstants.KEY_ESCAPE && (key >= 0 || event.key() == InputConstants.KEY_DELETE)) { this.keys.key = key; this.config.save(); }
 			this.binding = false; this.keyButton.setMessage(this.keyLabel()); return true;
 		}
 		if (event.key() == InputConstants.KEY_ESCAPE && this.popup.stream().anyMatch(b -> b.visible)) { this.popup.forEach(b -> b.visible = false); return true; }
@@ -130,8 +132,9 @@ public final class PatinaUtilitySettingsScreen extends Screen {
 		g.fill(this.x, this.y, this.x + this.w, this.y + 2, PatinaSettingsScreen.ACCENT);
 		PatinaSettingsScreen.drawLabel(g, this.font, this.title, this.x + 12, this.y + 10, 0.9f, PatinaSettingsScreen.HEADING);
 		String description = PatinaLang.get(PatinaSettingsScreen.NAMES[this.mod] + ".description");
-		for (int i = 0; i < this.font.split(Component.literal(description), (int)((this.w - 24) / 0.72f)).size() && i < 2; i++) {
-			var line = this.font.split(Component.literal(description), (int)((this.w - 24) / 0.72f)).get(i);
+		var lines = this.font.split(Component.literal(description), (int)((this.w - 24) / 0.72f));
+		for (int i = 0; i < lines.size() && i < 2; i++) {
+			var line = lines.get(i);
 			g.pose().pushMatrix(); g.pose().translate(this.x + 12, this.y + 30 + i * 8); g.pose().scale(0.72f); g.text(this.font, line, 0, 0, PatinaSettingsScreen.HINT); g.pose().popMatrix();
 		}
 		for (int i = 0; i < this.labels.size(); i++) PatinaSettingsScreen.drawLabel(g, this.font, PatinaLang.text("patina.option." + this.labels.get(i)), this.x + 12, this.y + 54 + i * 24, 0.82f, 0xFFE8F0EE);

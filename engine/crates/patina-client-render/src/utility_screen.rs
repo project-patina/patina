@@ -24,7 +24,9 @@ impl UtilityScreen {
     pub fn bind(&mut self, key: KeyCode) -> bool {
         if !self.binding { return false; }
         self.binding = false;
-        if key != KeyCode::Escape { client_settings::update(|s| s.mods.utility_mut(self.module).key = if key == KeyCode::Delete { -1 } else { client_settings::glfw_key(key) }); }
+        // Delete unbinds; a key the shared table cannot name keeps the old binding.
+        let code = if key == KeyCode::Delete { -1 } else { client_settings::glfw_key(key) };
+        if key != KeyCode::Escape && (code >= 0 || key == KeyCode::Delete) { client_settings::update(|s| s.mods.utility_mut(self.module).key = code); }
         true
     }
     pub fn release(&mut self) { if self.slider.take().is_some() { client_settings::update(|_| {}); } }

@@ -12,8 +12,9 @@ pub(super) struct UtilityState {
 impl Default for UtilityState {
     fn default()->Self { Self {zoom:false,perspective:false,yaw:0.0,pitch:0.0,zoom_factor:4.0,current_zoom:1.0,zoom_press:false,perspective_press:false,previous_camera:None,was_dead:false,death:None} }
 }
-pub(super) fn activation(m:&UtilityMod, playing:bool, down:bool, previous:bool, active:bool)->bool {
-    m.enabled && playing && if m.activation=="toggle" { if down&&!previous {!active}else{active} }else{down}
+/// Hold: on while the key is down. Toggle: `down` is a press since the last frame, and flips it.
+pub(super) fn activation(m:&UtilityMod, playing:bool, down:bool, active:bool)->bool {
+    m.enabled && playing && if m.activation=="toggle" { if down {!active}else{active} }else{down}
 }
 impl Game<'_> {
     pub(super) fn utility_key_press(&mut self,key:winit::keyboard::KeyCode) {
@@ -28,8 +29,8 @@ impl Game<'_> {
         let key=|code|code>=0&&self.keys.iter().any(|key|client_settings::glfw_key(*key)==code);
         let (zk,pk)=(key(mods.zoom.key),key(mods.perspective.key));
         let state=&mut self.extras.utilities;
-        let zoom=activation(&mods.zoom,playing,if mods.zoom.activation=="toggle"{state.zoom_press}else{zk},false,state.zoom);
-        let perspective=activation(&mods.perspective,playing,if mods.perspective.activation=="toggle"{state.perspective_press}else{pk},false,state.perspective);
+        let zoom=activation(&mods.zoom,playing,if mods.zoom.activation=="toggle"{state.zoom_press}else{zk},state.zoom);
+        let perspective=activation(&mods.perspective,playing,if mods.perspective.activation=="toggle"{state.perspective_press}else{pk},state.perspective);
         if zoom&&!state.zoom {state.zoom_factor=mods.zoom.factor;}
         if perspective&&!state.perspective {state.previous_camera=Some(self.camera_type);state.yaw=self.yaw;state.pitch=self.pitch;self.camera_type=CameraType::ThirdPersonBack;}
         else if !perspective&&state.perspective&&let Some(previous)=state.previous_camera.take(){self.camera_type=previous;}
@@ -68,6 +69,6 @@ impl Game<'_> {
 #[cfg(test)] mod tests {
     use super::*;
     #[test] fn activation_modes_require_a_press_and_stop_when_disabled_or_a_screen_opens(){
-        let mut m=UtilityMod{enabled:true,..Default::default()};assert!(activation(&m,true,true,false,false));assert!(!activation(&m,true,false,true,true));m.activation="toggle".into();assert!(activation(&m,true,true,false,false));assert!(activation(&m,true,false,true,true));assert!(!activation(&m,true,true,false,true));assert!(!activation(&m,false,false,false,true));m.enabled=false;assert!(!activation(&m,true,true,false,true));
+        let mut m=UtilityMod{enabled:true,..Default::default()};assert!(activation(&m,true,true,false));assert!(!activation(&m,true,false,true));m.activation="toggle".into();assert!(activation(&m,true,true,false));assert!(activation(&m,true,false,true));assert!(!activation(&m,true,true,true));assert!(!activation(&m,false,false,true));m.enabled=false;assert!(!activation(&m,true,true,true));
     }
 }

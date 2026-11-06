@@ -30,8 +30,8 @@ public final class ArmorPreviewSmokeTest {
         if (reloaded.mods.zoom.key != 67 || reloaded.mods.perspective.key != 86) throw new AssertionError("Independent default key binds");
         if (PatinaKeyBindings.nativeCode(67) != com.mojang.blaze3d.platform.InputConstants.KEY_C || PatinaKeyBindings.sharedCode(com.mojang.blaze3d.platform.InputConstants.KEY_B) != 66 || PatinaKeyBindings.nativeCode(86) != com.mojang.blaze3d.platform.InputConstants.KEY_V) throw new AssertionError("SDL key translation");
         var keyMod = reloaded.mods.perspective; keyMod.enabled = true; keyMod.activation = "toggle";
-        if (!PatinaUtilities.activation(keyMod, true, true, false, false) || !PatinaUtilities.activation(keyMod, true, false, true, true)
-            || PatinaUtilities.activation(keyMod, true, true, false, true) || PatinaUtilities.activation(keyMod, false, true, false, true)) throw new AssertionError("Perspective activation modes");
+        if (!PatinaUtilities.activation(keyMod, true, true, false) || !PatinaUtilities.activation(keyMod, true, false, true)
+            || PatinaUtilities.activation(keyMod, true, true, true) || PatinaUtilities.activation(keyMod, false, true, true)) throw new AssertionError("Perspective activation modes");
         if (!PatinaUtilities.coordinates(123.9,45.8,-1422.2).equals("123 45 -1423")) throw new AssertionError("Death coordinates must floor negative positions");
         if (!PatinaHud.duration(-1).equals("∞") || !PatinaHud.roman(8).equals("VIII")) throw new AssertionError("Effect levels and infinite duration");
         System.out.println("PASS: preview before registry bootstrap; empty slot; old configuration migration; malformed armor options");

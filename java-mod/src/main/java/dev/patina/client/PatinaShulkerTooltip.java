@@ -5,7 +5,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.tooltip.ClientTooltipComponent;
-import net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
@@ -15,10 +14,11 @@ import net.minecraft.world.item.BlockItem;
 /** A read-only 9 by 3 inventory inside the item's ordinary tooltip. */
 public final class PatinaShulkerTooltip {
 	private PatinaShulkerTooltip() { }
-	public static boolean draw(GuiGraphicsExtractor g, Font font, ItemStack stack, int x, int y) {
+	/** The tooltip's lines and grid, or null when the vanilla tooltip should show. */
+	public static List<ClientTooltipComponent> components(ItemStack stack) {
 		var config = PatinaConfig.get().mods.shulker_tooltip;
 		if (!config.enabled || (config.require_shift && !com.mojang.blaze3d.platform.InputConstants.isKeyDown(com.mojang.blaze3d.platform.InputConstants.KEY_LSHIFT) && !com.mojang.blaze3d.platform.InputConstants.isKeyDown(com.mojang.blaze3d.platform.InputConstants.KEY_RSHIFT))
-			|| !(stack.getItem() instanceof BlockItem block) || !(block.getBlock() instanceof ShulkerBoxBlock)) return false;
+			|| !(stack.getItem() instanceof BlockItem block) || !(block.getBlock() instanceof ShulkerBoxBlock)) return null;
 		var contents = stack.get(DataComponents.CONTAINER);
 		List<ItemStack> slots = contents == null ? List.of() : contents.itemCopies().limit(27).toList();
 		List<ClientTooltipComponent> components = new ArrayList<>();
@@ -35,6 +35,6 @@ public final class PatinaShulkerTooltip {
 				}
 			}
 		});
-		g.tooltip(font, components, x, y, DefaultTooltipPositioner.INSTANCE, null, false); return true;
+		return components;
 	}
 }

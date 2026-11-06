@@ -18,7 +18,6 @@ public final class PatinaUtilities {
 	private static final Gson JSON = new Gson();
 	private static Vec3 lastPosition;
 	private static LocalPlayer lastPlayer;
-	private static boolean lastZoomKey, lastPerspectiveKey;
 	private static boolean zoomActive, perspectiveActive;
 	private static boolean zoomPress, perspectivePress;
 	private static CameraType previousCamera;
@@ -35,11 +34,11 @@ public final class PatinaUtilities {
 		boolean playing = mc.player != null && mc.gui.screen() == null;
 		boolean zoomKey = playing && PatinaKeyBindings.nativeCode(mods.zoom.key) >= 0 && InputConstants.isKeyDown(PatinaKeyBindings.nativeCode(mods.zoom.key));
 		boolean perspectiveKey = playing && PatinaKeyBindings.nativeCode(mods.perspective.key) >= 0 && InputConstants.isKeyDown(PatinaKeyBindings.nativeCode(mods.perspective.key));
-		boolean nextZoom = activation(mods.zoom, playing, "toggle".equals(mods.zoom.activation) ? zoomPress : zoomKey, false, zoomActive);
-		boolean nextPerspective = activation(mods.perspective, playing, "toggle".equals(mods.perspective.activation) ? perspectivePress : perspectiveKey, false, perspectiveActive);
+		boolean nextZoom = activation(mods.zoom, playing, "toggle".equals(mods.zoom.activation) ? zoomPress : zoomKey, zoomActive);
+		boolean nextPerspective = activation(mods.perspective, playing, "toggle".equals(mods.perspective.activation) ? perspectivePress : perspectiveKey, perspectiveActive);
 		zoomPress = perspectivePress = false;
 		if (nextZoom && !zoomActive) zoomFactor = mods.zoom.factor;
-		zoomActive = nextZoom; lastZoomKey = zoomKey; lastPerspectiveKey = perspectiveKey;
+		zoomActive = nextZoom;
 		if (nextPerspective && !perspectiveActive) {
 			previousCamera = mc.options.getCameraType(); cameraYaw = mc.player.getYRot(); cameraPitch = mc.player.getXRot();
 			mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);
@@ -60,10 +59,12 @@ public final class PatinaUtilities {
 		if (mods.zoom.enabled && "toggle".equals(mods.zoom.activation) && mods.zoom.key == shared) zoomPress = !zoomPress;
 		if (mods.perspective.enabled && "toggle".equals(mods.perspective.activation) && mods.perspective.key == shared) perspectivePress = !perspectivePress;
 	}
-	public static boolean activation(PatinaConfig.UtilityMod mod, boolean playing, boolean down, boolean previous, boolean active) {
+	/** Hold: on while the key is down. Toggle: `down` is a press since the last tick, and flips it. */
+	public static boolean activation(PatinaConfig.UtilityMod mod, boolean playing, boolean down, boolean active) {
 		if (!mod.enabled || !playing) return false;
-		return "toggle".equals(mod.activation) ? (down && !previous ? !active : active) : down;
+		return "toggle".equals(mod.activation) ? (down ? !active : active) : down;
 	}
+	public static boolean zooming() { return zoomActive; }
 	public static boolean perspective() { return perspectiveActive; }
 	public static float yaw() { return cameraYaw; }
 	public static float pitch() { return cameraPitch; }
